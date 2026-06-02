@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body {
+  width:100%; height:100%;
+  overflow:hidden;
+  background: radial-gradient(ellipse at 30% 40%, #1a0a2e 0%, transparent 55%),
+              radial-gradient(ellipse at 75% 65%, #0a1a2e 0%, transparent 55%),
+              #0a0a16;
+  font-family: -apple-system, 'SF Pro Display', 'Segoe UI', sans-serif;
+  display:flex; align-items:center; justify-content:center;
+}
+
+.glass-defs { position:fixed; width:0; height:0; overflow:hidden; }
+
+.pill {
+  display:inline-flex; align-items:center; gap:17px;
+  padding:13px 24px;
+  border-radius:999px;
+  backdrop-filter: url(#lip-filter);
+  -webkit-backdrop-filter: url(#lip-filter);
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.28);
+  border-bottom-color: rgba(255,255,255,0.10);
+  cursor: grab;
+  user-select:none;
+  transform-origin: center center;
+  will-change: transform, box-shadow;
+  position:relative;
+}
+.pill:active { cursor:grabbing; }
+
+.pill::before {
+  content:''; position:absolute; inset:0; border-radius:999px;
+  background: linear-gradient(155deg,
+    rgba(255,255,255,0.22) 0%,
+    rgba(255,255,255,0.07) 30%,
+    transparent 55%,
+    rgba(255,255,255,0.03) 100%);
+  pointer-events:none; z-index:10;
+}
+
+.lamp {
+  width:24px; height:24px; border-radius:50%;
+  position:relative; z-index:5; flex-shrink:0;
+}
+.lamp::before {
+  content:''; position:absolute;
+  top:3px; left:4px; width:8px; height:6px; border-radius:50%;
+  background:radial-gradient(ellipse,rgba(255,255,255,.82) 0%,transparent 100%);
+  z-index:2;
+}
+.lamp::after {
+  content:''; position:absolute;
+  bottom:3px; right:4px; width:6px; height:4px; border-radius:50%;
+  background:radial-gradient(ellipse,rgba(255,255,255,.20) 0%,transparent 100%);
+  z-index:2;
+}
+.lamp.red    { background:radial-gradient(circle at 38% 32%,#ff7070,#b30018); box-shadow:0 0 0 1.5px rgba(0,0,0,.25),0 0 10px rgba(200,0,20,.72),0 0 24px rgba(200,0,20,.30); }
+.lamp.yellow { background:radial-gradient(circle at 38% 32%,#ffe577,#c07800); box-shadow:0 0 0 1.5px rgba(0,0,0,.25),0 0 10px rgba(210,140,0,.72),0 0 24px rgba(210,140,0,.30); }
+.lamp.green  { background:radial-gradient(circle at 38% 32%,#72ffb2,#00883a); box-shadow:0 0 0 1.5px rgba(0,0,0,.25),0 0 10px rgba(0,185,70,.72),0 0 24px rgba(0,185,70,.30); }
+.lamp.grey   { background:radial-gradient(circle at 38% 32%,rgba(255,255,255,.10),rgba(0,0,0,.42)); box-shadow:0 0 0 1.5px rgba(0,0,0,.30),inset 0 2px 5px rgba(0,0,0,.52); }
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.08} }
+.blink { animation:blink .85s ease-in-out infinite; }
+</style>
+</head>
+<body>
+
+<svg class="glass-defs">
+  <defs>
+    <filter id="lip-filter"
+            x="-15%" y="-30%" width="130%" height="160%"
+            color-interpolation-filters="sRGB">
+      <feImage id="disp-img" result="disp" x="0" y="0" preserveAspectRatio="none"/>
+      <feDisplacementMap id="disp-node"
+        in="SourceGraphic" in2="disp"
+        scale="40" xChannelSelector="R" yChannelSelector="G"
+        result="refracted"/>
+      <feColorMatrix id="sat-node"
+        in="refracted" type="saturate" values="1.8" result="vivid"/>
+      <feGaussianBlur id="blur-node" in="vivid" stdDeviation="1.5"/>
+    </filter>
+  </defs>
+</svg>
+
+<div class="pill" id="pill">
+  <div class="lamp grey"  id="lr"></div>
+  <div class="lamp grey"  id="ly"></div>
+  <div class="lamp grey"  id="lg"></div>
+</div>
+
+<script>
+// ── Spring 物理 ──────────────────────────────────────
+class Spring {
+  constructor(k, b, init = 0) {
+    this.k = k; this.b = b;
+    this.x = init; this.v = 0; this.target = init;
+  }
+  tick(dt) {
+    const f = -this.k*(this.x-this.target) - this.b*this.v;
+    this.v += f*dt; this.x += this.v*dt;
+    return this.x;
+  }
+}
+
+const sprU  = new Spring(340, 20, 1.0);
+const sprSY = new Spring(340, 30, 1.0);
+const sprSX = new Spring(340, 30, 1.0);
+const sprSH = new Spring(220, 24, 0.16);
+const sprIN = new Spring(220, 24, 0.0);
+const sprBL = new Spring(340, 30, 4);
+const sprSP = new Spring(340, 30, 9);
+const sprOY = new Spring(340, 30, 0);
+
+let pressed = false, velX = 0, lastMX = 0, lastMT = 0;
+
+function setPressed(v) {
+  pressed = v;
+  sprU.target  = v ? 1.08 : 1.0;
+  sprSH.target = v ? 0.28 : 0.16;
+  sprIN.target = v ? 0.27 : 0.0;
+  sprBL.target = v ? 20   : 4;
+  sprSP.target = v ? 28   : 9;
+  sprOY.target = v ? 6    : 0;
+}
+
+// ── 位移图：斯涅尔定律 bezel-lip ─────────────────────
+function buildLipMap(W, H, bezelW = 10, n = 1.5) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.round(W*dpr), h = Math.round(H*dpr), bw = bezelW*dpr;
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(w, h);
+  const R = h/2, n21 = 1.0/n;
+
+  for (let py = 0; py < h; py++) {
+    for (let px = 0; px < w; px++) {
+      const idx = (py*w+px)*4;
+      const cx = Math.max(R, Math.min(w-R, px)), cy = h/2;
+      const dx = px-cx, dy = py-cy;
+      const dist = Math.sqrt(dx*dx+dy*dy);
+      img.data[idx] = img.data[idx+1] = 128;
+      img.data[idx+2] = 0;
+      img.data[idx+3] = dist < R ? 255 : 0;
+      if (dist < R && dist > R-bw && dist > 0.5) {
+        const nx = -dx/dist, ny = -dy/dist;
+        const t = (dist-(R-bw))/bw;
+        const cosI = Math.max(0.01, t);
+        const sinI = Math.sqrt(1-cosI*cosI);
+        const sinT = n21*sinI;
+        if (sinT < 1.0) {
+          const cosT = Math.sqrt(1-sinT*sinT);
+          const bend = n21*cosI - cosT;
+          const falloff = Math.sin(t*Math.PI);
+          const s = 1.2;
+          img.data[idx]   = Math.min(255,Math.max(0,Math.round(128+nx*bend*s*falloff*127)));
+          img.data[idx+1] = Math.min(255,Math.max(0,Math.round(128+ny*bend*s*falloff*127)));
+        }
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return { url: canvas.toDataURL(), w: W, h: H };
+}
+
+const pill = document.getElementById('pill');
+let mapW = 0, mapH = 0;
+
+function injectDispMap() {
+  const r = pill.getBoundingClientRect();
+  if (r.width < 10 || (r.width === mapW && r.height === mapH)) return;
+  mapW = r.width; mapH = r.height;
+  const { url, w, h } = buildLipMap(mapW, mapH, 10, 1.5);
+  const el = document.getElementById('disp-img');
+  el.setAttribute('href', url);
+  el.setAttribute('width', w);
+  el.setAttribute('height', h);
+}
+
+// ── 动画循环 ─────────────────────────────────────────
+let lastRaf = 0;
+function loop(t) {
+  requestAnimationFrame(loop);
+  const dt = Math.min((t-lastRaf)/1000, 0.05);
+  lastRaf = t;
+  velX *= 0.82;
+  const u  = sprU.tick(dt);
+  sprSY.target = u * Math.max(0.70, 1-Math.abs(velX)/5000);
+  const sy = sprSY.tick(dt);
+  sprSX.target = u + (u-sy);
+  const sx = sprSX.tick(dt);
+  const sh = sprSH.tick(dt), si = sprIN.tick(dt);
+  const bl = sprBL.tick(dt), sp = sprSP.tick(dt), oy = sprOY.tick(dt);
+
+  pill.style.transform = `scaleX(${sx.toFixed(4)}) scaleY(${sy.toFixed(4)})`;
+  const ox = oy*0.5;
+  const shadow = [
+    `${oy.toFixed(1)}px ${bl.toFixed(1)}px ${sp.toFixed(1)}px rgba(0,0,0,${sh.toFixed(3)})`,
+    si > 0.02 ? `inset ${ox.toFixed(1)}px ${(oy*0.5).toFixed(1)}px 24px rgba(0,0,0,${si.toFixed(3)}), inset ${(-ox).toFixed(1)}px ${(-oy*0.5).toFixed(1)}px 24px rgba(255,255,255,${si.toFixed(3)})` : ''
+  ].filter(Boolean).join(', ');
+  pill.style.boxShadow = shadow;
+}
+
+
+// ── Go 调用的 JS 接口 ────────────────────────────────
+// Go: webview.Eval(`setState("idle")`)
+window.setState = function(s) {
+  const lr = document.getElementById('lr');
+  const ly = document.getElementById('ly');
+  const lg = document.getElementById('lg');
+  lr.className = 'lamp grey';
+  ly.className = 'lamp grey';
+  lg.className = 'lamp grey';
+  if (s === 'idle')    lg.className = 'lamp green';
+  if (s === 'think')   ly.className = 'lamp yellow blink';
+  if (s === 'running') lr.className = 'lamp red blink';
+  // s === 'off': 三灯全灰，已在上方重置
+};
+
+// ── 启动 ─────────────────────────────────────────────
+window.addEventListener('load', () => {
+  requestAnimationFrame(() => {
+    injectDispMap();
+    requestAnimationFrame(loop);
+  });
+});
+window.addEventListener('resize', injectDispMap);
+</script>
+</body>
+</html>
