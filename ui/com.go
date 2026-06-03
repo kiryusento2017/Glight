@@ -58,6 +58,7 @@ const (
 	vtCtxRSSetViewports         = 44
 	vtCtxCopyResource           = 47
 	vtCtxUpdateSubresource      = 48
+	vtCtxClearRTV               = 50
 
 	// IDXGIDevice / IDXGIObject / IDXGIFactory2
 	vtDxgiDeviceGetAdapter   = 7

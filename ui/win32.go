@@ -1,81 +1,143 @@
 package ui
 
 import (
-	"unsafe"
-
 	"golang.org/x/sys/windows"
 )
 
 var (
-	user32  = windows.NewLazySystemDLL("user32.dll")
-	shell32 = windows.NewLazySystemDLL("shell32.dll")
-	dwmapi  = windows.NewLazySystemDLL("dwmapi.dll")
+	user32   = windows.NewLazySystemDLL("user32.dll")
+	shell32  = windows.NewLazySystemDLL("shell32.dll")
+	dwmapi   = windows.NewLazySystemDLL("dwmapi.dll")
+	kernel32 = windows.NewLazySystemDLL("kernel32.dll")
 
-	procSetWindowLongPtrW   = user32.NewProc("SetWindowLongPtrW")
-	procGetWindowLongPtrW   = user32.NewProc("GetWindowLongPtrW")
-	procSetWindowPos        = user32.NewProc("SetWindowPos")
-	procGetWindowRect       = user32.NewProc("GetWindowRect")
-	procGetSystemMetrics    = user32.NewProc("GetSystemMetrics")
+	// 窗口创建与消息循环
+	procRegisterClassExW = user32.NewProc("RegisterClassExW")
+	procCreateWindowExW  = user32.NewProc("CreateWindowExW")
+	procDefWindowProcW   = user32.NewProc("DefWindowProcW")
+	procDestroyWindow    = user32.NewProc("DestroyWindow")
+	procShowWindow       = user32.NewProc("ShowWindow")
+	procGetMessageW      = user32.NewProc("GetMessageW")
+	procTranslateMessage = user32.NewProc("TranslateMessage")
+	procDispatchMessageW = user32.NewProc("DispatchMessageW")
+	procPostMessageW     = user32.NewProc("PostMessageW")
+	procPostQuitMessage  = user32.NewProc("PostQuitMessage")
+	procSetTimer         = user32.NewProc("SetTimer")
+
+	// 样式 / 定位 / DPI
+	procSetWindowLongPtrW         = user32.NewProc("SetWindowLongPtrW")
+	procGetWindowLongPtrW         = user32.NewProc("GetWindowLongPtrW")
+	procSetWindowPos              = user32.NewProc("SetWindowPos")
+	procGetWindowRect             = user32.NewProc("GetWindowRect")
+	procGetSystemMetrics          = user32.NewProc("GetSystemMetrics")
+	procSetWindowDisplayAffinity  = user32.NewProc("SetWindowDisplayAffinity")
+	procSetThreadDpiAwarenessCtx  = user32.NewProc("SetThreadDpiAwarenessContext")
+
+	// 菜单 / 托盘
 	procCreatePopupMenu     = user32.NewProc("CreatePopupMenu")
 	procAppendMenuW         = user32.NewProc("AppendMenuW")
 	procTrackPopupMenu      = user32.NewProc("TrackPopupMenu")
 	procDestroyMenu         = user32.NewProc("DestroyMenu")
 	procSetForegroundWindow = user32.NewProc("SetForegroundWindow")
 	procGetCursorPos        = user32.NewProc("GetCursorPos")
-	procShellNotifyIconW    = shell32.NewProc("Shell_NotifyIconW")
 	procLoadIconW           = user32.NewProc("LoadIconW")
+	procShellNotifyIconW    = shell32.NewProc("Shell_NotifyIconW")
 
 	procDwmSetWindowAttribute = dwmapi.NewProc("DwmSetWindowAttribute")
+	procGetModuleHandleW      = kernel32.NewProc("GetModuleHandleW")
 )
 
-// GWL_STYLE and GWL_EXSTYLE are negative; declared as typed vars to avoid uintptr overflow.
-var gwlStyle   = -16
+// GWL_STYLE / GWL_EXSTYLE 为负，声明为 typed var 避免 uintptr 溢出。
 var gwlExStyle = -20
 
+// DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 == (HANDLE)-4
+var dpiPerMonitorV2 = ^uintptr(3)
+
 const (
-	WS_POPUP          = 0x80000000
-	WS_EX_TOPMOST     = 0x00000008
-	WS_EX_TOOLWINDOW  = 0x00000080
-	WS_EX_NOACTIVATE  = 0x08000000
-	WS_EX_TRANSPARENT = 0x00000020
-	WS_CAPTION        = 0x00C00000
-	WS_THICKFRAME     = 0x00040000
+	wsPopup   = 0x80000000
+	wsVisible = 0x10000000
 
-	HWND_TOPMOST = ^uintptr(0) // (HWND)(-1)
-	SWP_NOMOVE       = 0x0002
-	SWP_NOSIZE       = 0x0001
-	SWP_NOZORDER     = 0x0004
-	SWP_NOACTIVATE   = 0x0010
-	SWP_FRAMECHANGED = 0x0020
+	wsExTopmost             = 0x00000008
+	wsExToolwindow          = 0x00000080
+	wsExNoactivate          = 0x08000000
+	wsExTransparent         = 0x00000020
+	wsExNoredirectionbitmap = 0x00200000
 
-	SM_CXSCREEN = 0
+	wdaExcludeFromCapture = 0x00000011
 
-	MF_STRING    = 0x0000
-	MF_CHECKED   = 0x0008
-	MF_SEPARATOR = 0x0800
-	TPM_RETURNCMD   = 0x0100
-	TPM_RIGHTALIGN  = 0x0008
-	TPM_BOTTOMALIGN = 0x0020
+	// 窗口消息
+	wmDestroy     = 0x0002
+	wmClose       = 0x0010
+	wmCommand     = 0x0111
+	wmNcHitTest   = 0x0084
+	wmRButtonUp   = 0x0205
+	wmLButtonDblclk = 0x0203
+	wmTray        = 0x0400 + 1 // WM_APP-ish 自定义托盘回调
+	wmTimer       = 0x0113
+	htCaption     = 2
 
-	NIM_ADD    = 0
-	NIM_DELETE = 2
-	NIF_ICON   = 0x02
-	NIF_TIP    = 0x04
+	swHide           = 0
+	swShowNoActivate = 4
 
-	IDI_APPLICATION = 32512
+	hwndTopmost      = ^uintptr(0) // (HWND)-1
+	swpNoMove        = 0x0002
+	swpNoSize        = 0x0001
+	swpNoZOrder      = 0x0004
+	swpNoActivate    = 0x0010
+	swpFrameChanged  = 0x0020
+	swpShowWindow    = 0x0040
 
-	MENU_SHOW_HIDE   = 1001
-	MENU_PASSTHROUGH = 1002
-	MENU_EXIT        = 1003
+	smCXScreen = 0
+	smCYScreen = 1
 
-	DWMWA_WINDOW_CORNER_PREFERENCE = 33
-	DWMWCP_ROUND                   = 2
-	DWMWA_SYSTEMBACKDROP_TYPE      = 38
-	DWMSBT_TRANSIENTWINDOW         = 3
+	csVRedraw = 0x0001
+	csHRedraw = 0x0002
+
+	mfString    = 0x0000
+	mfChecked   = 0x0008
+	mfSeparator = 0x0800
+	tpmReturnCmd   = 0x0100
+	tpmRightAlign  = 0x0008
+	tpmBottomAlign = 0x0020
+
+	nimAdd     = 0
+	nimDelete  = 2
+	nifIcon    = 0x02
+	nifTip     = 0x04
+	nifMessage = 0x01
+
+	idiApplication = 32512
+
+	menuShowHide   = 1001
+	menuPassthrough = 1002
+	menuExit        = 1003
 )
 
 type POINT struct{ X, Y int32 }
-type RECT  struct{ Left, Top, Right, Bottom int32 }
+type RECT struct{ Left, Top, Right, Bottom int32 }
+
+type wndClassExW struct {
+	cbSize        uint32
+	style         uint32
+	lpfnWndProc   uintptr
+	cbClsExtra    int32
+	cbWndExtra    int32
+	hInstance     windows.Handle
+	hIcon         windows.Handle
+	hCursor       windows.Handle
+	hbrBackground windows.Handle
+	lpszMenuName  *uint16
+	lpszClassName *uint16
+	hIconSm       windows.Handle
+}
+
+type MSG struct {
+	HWnd    windows.HWND
+	Message uint32
+	WParam  uintptr
+	LParam  uintptr
+	Time    uint32
+	Pt      POINT
+}
 
 type NOTIFYICONDATAW struct {
 	CbSize           uint32
@@ -98,53 +160,21 @@ type NOTIFYICONDATAW struct {
 func u16(s string) *uint16 { p, _ := windows.UTF16PtrFromString(s); return p }
 func sysMetric(n int) int  { r, _, _ := procGetSystemMetrics.Call(uintptr(n)); return int(r) }
 
-// applyWindowStyles transforms the WebView2 window to frameless floating widget.
-func applyWindowStyles(hwnd windows.HWND) {
-	// Remove caption and thick frame, replace with popup style
-	style, _, _ := procGetWindowLongPtrW.Call(uintptr(hwnd), uintptr(gwlStyle))
-	style &^= uintptr(WS_CAPTION | WS_THICKFRAME)
-	style |= uintptr(WS_POPUP)
-	procSetWindowLongPtrW.Call(uintptr(hwnd), uintptr(gwlStyle), style)
+// setThreadDPIAware 让当前线程 PerMonitorV2 感知，保证窗口坐标与桌面纹理同在物理像素。
+func setThreadDPIAware() { procSetThreadDpiAwarenessCtx.Call(dpiPerMonitorV2) }
 
-	// Add topmost + toolwindow (hidden from taskbar) + no activate
-	exStyle, _, _ := procGetWindowLongPtrW.Call(uintptr(hwnd), uintptr(gwlExStyle))
-	exStyle |= uintptr(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)
-	procSetWindowLongPtrW.Call(uintptr(hwnd), uintptr(gwlExStyle), exStyle)
-
-	// Windows 11: rounded corners
-	corners := uint32(DWMWCP_ROUND)
-	procDwmSetWindowAttribute.Call(
-		uintptr(hwnd), DWMWA_WINDOW_CORNER_PREFERENCE,
-		uintptr(unsafe.Pointer(&corners)), 4,
-	)
-
-	// Windows 11: acrylic backdrop (desktop blur behind the window)
-	backdrop := uint32(DWMSBT_TRANSIENTWINDOW)
-	procDwmSetWindowAttribute.Call(
-		uintptr(hwnd), DWMWA_SYSTEMBACKDROP_TYPE,
-		uintptr(unsafe.Pointer(&backdrop)), 4,
-	)
-
-	// Force redraw
-	procSetWindowPos.Call(
-		uintptr(hwnd), HWND_TOPMOST,
-		0, 0, 0, 0,
-		SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE|SWP_FRAMECHANGED,
-	)
-}
-
-// setPassthrough enables/disables click-through on the window.
+// setPassthrough 启用/关闭点击穿透（动态增删 WS_EX_TRANSPARENT）。
 func setPassthrough(hwnd windows.HWND, on bool) {
 	ex, _, _ := procGetWindowLongPtrW.Call(uintptr(hwnd), uintptr(gwlExStyle))
 	if on {
-		ex |= uintptr(WS_EX_TRANSPARENT)
+		ex |= wsExTransparent
 	} else {
-		ex &^= uintptr(WS_EX_TRANSPARENT)
+		ex &^= wsExTransparent
 	}
 	procSetWindowLongPtrW.Call(uintptr(hwnd), uintptr(gwlExStyle), ex)
 }
 
-// windowCenter returns the x coordinate to center a window of given width on screen.
-func windowCenter(width int) int {
-	return (sysMetric(SM_CXSCREEN) - width) / 2
+// screenCenter 返回让 width×height 的窗口居中所需的左上角坐标。
+func screenCenter(width, height int) (x, y int) {
+	return (sysMetric(smCXScreen) - width) / 2, (sysMetric(smCYScreen) - height) / 2
 }
