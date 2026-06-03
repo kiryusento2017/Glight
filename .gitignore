@@ -1,0 +1,11 @@
+# 构建产物
+*.exe
+
+# 运行时配置（窗口位置/穿透/可见性，每台机器不同）
+config.json
+
+# spike 抓图
+*_capture.png
+
+# Claude skill 缓存
+.superpowers/

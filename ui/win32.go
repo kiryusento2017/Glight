@@ -11,23 +11,19 @@ var (
 	shell32 = windows.NewLazySystemDLL("shell32.dll")
 	dwmapi  = windows.NewLazySystemDLL("dwmapi.dll")
 
-	procSetWindowLongPtrW  = user32.NewProc("SetWindowLongPtrW")
-	procGetWindowLongPtrW  = user32.NewProc("GetWindowLongPtrW")
-	procSetWindowPos       = user32.NewProc("SetWindowPos")
-	procGetWindowRect      = user32.NewProc("GetWindowRect")
-	procGetSystemMetrics   = user32.NewProc("GetSystemMetrics")
-	procCreatePopupMenu    = user32.NewProc("CreatePopupMenu")
-	procAppendMenuW        = user32.NewProc("AppendMenuW")
-	procTrackPopupMenu     = user32.NewProc("TrackPopupMenu")
-	procDestroyMenu        = user32.NewProc("DestroyMenu")
+	procSetWindowLongPtrW   = user32.NewProc("SetWindowLongPtrW")
+	procGetWindowLongPtrW   = user32.NewProc("GetWindowLongPtrW")
+	procSetWindowPos        = user32.NewProc("SetWindowPos")
+	procGetWindowRect       = user32.NewProc("GetWindowRect")
+	procGetSystemMetrics    = user32.NewProc("GetSystemMetrics")
+	procCreatePopupMenu     = user32.NewProc("CreatePopupMenu")
+	procAppendMenuW         = user32.NewProc("AppendMenuW")
+	procTrackPopupMenu      = user32.NewProc("TrackPopupMenu")
+	procDestroyMenu         = user32.NewProc("DestroyMenu")
 	procSetForegroundWindow = user32.NewProc("SetForegroundWindow")
-	procGetCursorPos       = user32.NewProc("GetCursorPos")
-	procShellNotifyIconW   = shell32.NewProc("Shell_NotifyIconW")
-	procLoadIconW          = user32.NewProc("LoadIconW")
-	procPostMessageW       = user32.NewProc("PostMessageW")
-	procDefWindowProcW     = user32.NewProc("DefWindowProcW")
-	procRegisterClassExW   = user32.NewProc("RegisterClassExW")
-	procCreateWindowExW    = user32.NewProc("CreateWindowExW")
+	procGetCursorPos        = user32.NewProc("GetCursorPos")
+	procShellNotifyIconW    = shell32.NewProc("Shell_NotifyIconW")
+	procLoadIconW           = user32.NewProc("LoadIconW")
 
 	procDwmSetWindowAttribute = dwmapi.NewProc("DwmSetWindowAttribute")
 )
@@ -37,15 +33,13 @@ var gwlStyle   = -16
 var gwlExStyle = -20
 
 const (
-	WS_POPUP         = 0x80000000
-	WS_VISIBLE       = 0x10000000
-	WS_EX_TOPMOST    = 0x00000008
-	WS_EX_TOOLWINDOW = 0x00000080
-	WS_EX_NOACTIVATE = 0x08000000
+	WS_POPUP          = 0x80000000
+	WS_EX_TOPMOST     = 0x00000008
+	WS_EX_TOOLWINDOW  = 0x00000080
+	WS_EX_NOACTIVATE  = 0x08000000
 	WS_EX_TRANSPARENT = 0x00000020
-	WS_EX_LAYERED    = 0x00080000
-	WS_CAPTION       = 0x00C00000
-	WS_THICKFRAME    = 0x00040000
+	WS_CAPTION        = 0x00C00000
+	WS_THICKFRAME     = 0x00040000
 
 	HWND_TOPMOST = ^uintptr(0) // (HWND)(-1)
 	SWP_NOMOVE       = 0x0002
@@ -55,7 +49,6 @@ const (
 	SWP_FRAMECHANGED = 0x0020
 
 	SM_CXSCREEN = 0
-	SM_CYSCREEN = 1
 
 	MF_STRING    = 0x0000
 	MF_CHECKED   = 0x0008
@@ -65,25 +58,20 @@ const (
 	TPM_BOTTOMALIGN = 0x0020
 
 	NIM_ADD    = 0
-	NIM_MODIFY = 1
 	NIM_DELETE = 2
-	NIF_MESSAGE = 0x01
-	NIF_ICON    = 0x02
-	NIF_TIP     = 0x04
-
-	WM_USER = 0x0400
-	WM_TRAY = WM_USER + 1
-	WM_LBUTTONDBLCLK = 0x0203
-	WM_RBUTTONUP     = 0x0205
+	NIF_ICON   = 0x02
+	NIF_TIP    = 0x04
 
 	IDI_APPLICATION = 32512
 
-	MENU_SHOW_HIDE      = 1001
-	MENU_PASSTHROUGH    = 1002
-	MENU_EXIT           = 1003
+	MENU_SHOW_HIDE   = 1001
+	MENU_PASSTHROUGH = 1002
+	MENU_EXIT        = 1003
 
 	DWMWA_WINDOW_CORNER_PREFERENCE = 33
-	DWMWCP_ROUND = 2
+	DWMWCP_ROUND                   = 2
+	DWMWA_SYSTEMBACKDROP_TYPE      = 38
+	DWMSBT_TRANSIENTWINDOW         = 3
 )
 
 type POINT struct{ X, Y int32 }
@@ -110,7 +98,7 @@ type NOTIFYICONDATAW struct {
 func u16(s string) *uint16 { p, _ := windows.UTF16PtrFromString(s); return p }
 func sysMetric(n int) int  { r, _, _ := procGetSystemMetrics.Call(uintptr(n)); return int(r) }
 
-// applyWindowStyles sets the window to: frameless, topmost, not in taskbar, no activation.
+// applyWindowStyles transforms the WebView2 window to frameless floating widget.
 func applyWindowStyles(hwnd windows.HWND) {
 	// Remove caption and thick frame, replace with popup style
 	style, _, _ := procGetWindowLongPtrW.Call(uintptr(hwnd), uintptr(gwlStyle))
@@ -123,9 +111,19 @@ func applyWindowStyles(hwnd windows.HWND) {
 	exStyle |= uintptr(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)
 	procSetWindowLongPtrW.Call(uintptr(hwnd), uintptr(gwlExStyle), exStyle)
 
-	// Apply rounded corners (Windows 11)
+	// Windows 11: rounded corners
 	corners := uint32(DWMWCP_ROUND)
-	procDwmSetWindowAttribute.Call(uintptr(hwnd), DWMWA_WINDOW_CORNER_PREFERENCE, uintptr(unsafe.Pointer(&corners)), 4)
+	procDwmSetWindowAttribute.Call(
+		uintptr(hwnd), DWMWA_WINDOW_CORNER_PREFERENCE,
+		uintptr(unsafe.Pointer(&corners)), 4,
+	)
+
+	// Windows 11: acrylic backdrop (desktop blur behind the window)
+	backdrop := uint32(DWMSBT_TRANSIENTWINDOW)
+	procDwmSetWindowAttribute.Call(
+		uintptr(hwnd), DWMWA_SYSTEMBACKDROP_TYPE,
+		uintptr(unsafe.Pointer(&backdrop)), 4,
+	)
 
 	// Force redraw
 	procSetWindowPos.Call(

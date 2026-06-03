@@ -2,29 +2,33 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>液态玻璃红绿灯 — 预览</title>
 <style>
 /* ===== Reset ===== */
-* { margin:0; padding:0; box-sizing:border-box; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
-html, body {
-    width: 250px;
-    height: 88px;
+/* ===== Body + 背景 ===== */
+body {
+    width: 100vw;
+    height: 100vh;
     overflow: hidden;
-    background: rgba(0,0,0,0.18);
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+    background: url('https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?q=80&w=2000&auto=format&fit=crop') center/cover no-repeat;
+    color: #fff;
     -webkit-font-smoothing: antialiased;
-    display: flex;
-    align-items: center;
-    justify-content: center;
 }
 
-/* ===== 玻璃胶囊（archisvaze 架构） ===== */
+/* ===== 玻璃面板（archisvaze 架构） ===== */
 .glass {
     position: absolute;
-    inset: 0;
+    width: 250px;
+    height: 88px;
     border-radius: 44px;
+    cursor: move;
     isolation: isolate;
-    box-shadow: 0px 4px 24px rgba(0,0,0,0.18);
+    touch-action: none;
+    box-shadow: 0px 4px 24px rgba(0, 0, 0, 0.18);
 }
 
 /* 顶层：tint + 内阴影 */
@@ -34,8 +38,8 @@ html, body {
     inset: 0;
     z-index: 1;
     border-radius: inherit;
-    box-shadow: inset 0 0 20px -5px rgba(255,255,255,0.45);
-    background-color: rgba(255,255,255,0.06);
+    box-shadow: inset 0 0 20px -5px rgba(255, 255, 255, 0.45);
+    background-color: rgba(255, 255, 255, 0.06);
     pointer-events: none;
 }
 
@@ -69,18 +73,27 @@ html, body {
     border-radius: 50%;
     background: #2a2a2a;
     box-shadow:
+        /* 玻璃透镜凹槽 — 外环暗边 */
         0 0 0 1px rgba(0,0,0,0.32),
+        /* 玻璃透镜凹槽 — 内环微亮边 */
         inset 0 1px 1px rgba(255,255,255,0.06),
+        /* 透镜底部阴影 — 灯沉入玻璃的深度感 */
         inset 0 3px 6px rgba(0,0,0,0.40);
+    transition: background 0.4s, box-shadow 0.4s;
     flex-shrink: 0;
 }
 
+/* 点亮 — 红光 + 玻璃折射散射 */
 .light.red.active {
     background: #e8302a;
     box-shadow:
+        /* 贴边折射光环 — 玻璃内部散射的红光 */
         0 0 0 2px rgba(255,50,50,0.28),
+        /* 内圈发光 — 透镜表面高亮 */
         0 0 14px rgba(255,30,40,0.80),
+        /* 外圈柔光 — 玻璃介质散射 */
         0 0 36px rgba(255,30,40,0.35),
+        /* 底部保持嵌入深度 */
         inset 0 2px 3px rgba(255,255,255,0.18);
 }
 .light.yellow.active {
@@ -107,12 +120,43 @@ html, body {
 .light.blinking {
     animation: blink 0.85s ease-in-out infinite;
 }
+
+/* ===== 底部提示栏 ===== */
+.info {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.75);
+    background: rgba(0,0,0,0.5);
+    padding: 10px 22px;
+    border-radius: 50px;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.08);
+    z-index: 10;
+    pointer-events: none;
+    white-space: nowrap;
+}
+.info b { color: #fff; font-weight: 700; }
+.state-tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 12px;
+    margin-left: 2px;
+    background: rgba(255,255,255,0.15);
+}
 </style>
 </head>
 <body>
 
-<!-- SVG 滤镜定义 -->
-<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute;overflow:hidden" color-interpolation-filters="sRGB">
+<!-- 隐藏 SVG：存放滤镜定义 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0"
+     style="position:absolute;overflow:hidden" color-interpolation-filters="sRGB">
     <defs id="svg-defs"></defs>
 </svg>
 
@@ -125,42 +169,55 @@ html, body {
     </div>
 </div>
 
+<!-- 底部提示栏 -->
+<div class="info" id="info">
+    按 <b>1</b> 红 · <b>2</b> 黄 · <b>3</b> 绿 · <b>4</b> 灰 — 拖拽移动 — 当前：<span class="state-tag" id="state-tag">红 · 执行中</span>
+</div>
+
 <script>
 // ===================================================================
-// 状态管理（Go 通过 wv.Eval("setState('red')") 调用）
-// 参数：'red' | 'yellow' | 'green' | 'grey'
+// 状态管理
 // ===================================================================
-var STATE_MAP = {
-    red:    { active: 'red',    blink: true  },
-    yellow: { active: 'yellow', blink: true  },
-    green:  { active: 'green',  blink: false },
-    grey:   { active: null,     blink: false },
+var STATES = {
+    1: { name: '红 · 执行中', active: 'red',    blink: true  },
+    2: { name: '黄 · 思考中', active: 'yellow', blink: true  },
+    3: { name: '绿 · 空闲',   active: 'green',  blink: false },
+    4: { name: '灰 · 未运行', active: null,     blink: false },
 };
 
-window.setState = function(s) {
-    var cfg = STATE_MAP[s] || STATE_MAP.grey;
+var currentState = 1;
+
+function setState(n) {
+    currentState = n;
+    var cfg = STATES[n];
     var map = { red: 'lr', yellow: 'ly', green: 'lg' };
+
     Object.keys(map).forEach(function(color) {
         var el = document.getElementById(map[color]);
         var on = color === cfg.active;
-        if (on) {
-            el.className = 'light ' + color + ' active' + (cfg.blink ? ' blinking' : '');
-        } else {
-            el.className = 'light ' + color;
-        }
+        el.classList.toggle('active', on);
+        el.classList.toggle('blinking', on && cfg.blink);
     });
-};
+
+    document.getElementById('state-tag').textContent = cfg.name;
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key >= '1' && e.key <= '4') setState(parseInt(e.key));
+});
 
 // ===================================================================
-// 滤镜生成（移植自 archisvaze/liquid-glass）
+// 滤镜生成（逐行移植自 archisvaze/liquid-glass）
 // ===================================================================
+
 var SURFACE_FNS = {
     convex_squircle: function(x) {
         return Math.pow(1 - Math.pow(1 - x, 4), 0.25);
     },
 };
 
-function calculateRefractionProfile(thickness, bezelWidth, heightFn, ior, samples) {
+// 折射轮廓计算（Snell 定律）
+function calculateRefractionProfile(glassThickness, bezelWidth, heightFn, ior, samples) {
     samples = samples || 128;
     var eta = 1 / ior;
     function refract(nx, ny) {
@@ -180,23 +237,27 @@ function calculateRefractionProfile(thickness, bezelWidth, heightFn, ior, sample
         var mag = Math.sqrt(deriv * deriv + 1);
         var ref = refract(-deriv / mag, -1 / mag);
         if (!ref) { profile[i] = 0; continue; }
-        profile[i] = ref[0] * ((y * bezelWidth + thickness) / ref[1]);
+        profile[i] = ref[0] * ((y * bezelWidth + glassThickness) / ref[1]);
     }
     return profile;
 }
 
+// 位移图：R=水平位移, G=垂直位移（128 = 零位移）
 function generateDisplacementMap(w, h, radius, bezelWidth, profile, maxDisp) {
     var c = document.createElement('canvas');
-    c.width = w; c.height = h;
+    c.width = w;
+    c.height = h;
     var ctx = c.getContext('2d');
     var img = ctx.createImageData(w, h);
     var d = img.data;
     for (var i = 0; i < d.length; i += 4) {
         d[i] = 128; d[i+1] = 128; d[i+2] = 0; d[i+3] = 255;
     }
+
     var r = radius, rSq = r * r, r1Sq = (r + 1) * (r + 1);
     var rBSq = Math.max(r - bezelWidth, 0) * Math.max(r - bezelWidth, 0);
     var wB = w - r * 2, hB = h - r * 2, S = profile.length;
+
     for (var y1 = 0; y1 < h; y1++) {
         for (var x1 = 0; x1 < w; x1++) {
             var px = x1 < r ? x1 - r : x1 >= w - r ? x1 - r - wB : 0;
@@ -220,18 +281,22 @@ function generateDisplacementMap(w, h, radius, bezelWidth, profile, maxDisp) {
     return c.toDataURL();
 }
 
+// 高光图：模拟玻璃表面反射
 function generateSpecularMap(w, h, radius, bezelWidth, angle) {
     angle = angle != null ? angle : Math.PI / 3;
     var c = document.createElement('canvas');
-    c.width = w; c.height = h;
+    c.width = w;
+    c.height = h;
     var ctx = c.getContext('2d');
     var img = ctx.createImageData(w, h);
     var d = img.data;
     d.fill(0);
+
     var r = radius, rSq = r * r, r1Sq = (r + 1) * (r + 1);
     var rBSq = Math.max(r - bezelWidth, 0) * Math.max(r - bezelWidth, 0);
     var wB = w - r * 2, hB = h - r * 2;
     var sv = [Math.cos(angle), Math.sin(angle)];
+
     for (var y1 = 0; y1 < h; y1++) {
         for (var x1 = 0; x1 < w; x1++) {
             var px = x1 < r ? x1 - r : x1 >= w - r ? x1 - r - wB : 0;
@@ -256,31 +321,47 @@ function generateSpecularMap(w, h, radius, bezelWidth, angle) {
     return c.toDataURL();
 }
 
-var PARAMS = { thickness: 32, bezel: 26, ior: 3.0, scale: 1.0, blur: 0.3, specOpacity: 0.5, specSat: 4 };
-var RADIUS = 44;
-var W = 250, H = 88;
+// ===================================================================
+// 玻璃参数（与 archisvaze 默认值对齐）
+// ===================================================================
+var P = {
+    thickness: 32,
+    bezel: 26,
+    ior: 3.0,
+    scale: 1.0,
+    blur: 0.3,
+    specOpacity: 0.5,
+    specSat: 4,
+};
+var RADIUS = 44; // border-radius = height/2 → 胶囊形
 
 function rebuildFilter() {
-    var clampedBezel = Math.min(PARAMS.bezel, RADIUS - 1, Math.min(W, H) / 2 - 1);
+    var glass = document.getElementById('glass');
+    var w = glass.offsetWidth;
+    var h = glass.offsetHeight;
+    if (w < 2 || h < 2) return;
+
     var heightFn = SURFACE_FNS.convex_squircle;
-    var profile = calculateRefractionProfile(PARAMS.thickness, clampedBezel, heightFn, PARAMS.ior, 128);
+    var clampedBezel = Math.min(P.bezel, RADIUS - 1, Math.min(w, h) / 2 - 1);
+
+    var profile = calculateRefractionProfile(P.thickness, clampedBezel, heightFn, P.ior, 128);
     var absVals = [];
     for (var i = 0; i < profile.length; i++) absVals.push(Math.abs(profile[i]));
     var maxDisp = Math.max.apply(null, absVals) || 1;
-    var dispUrl = generateDisplacementMap(W, H, RADIUS, clampedBezel, profile, maxDisp);
-    var specUrl = generateSpecularMap(W, H, RADIUS, clampedBezel * 2.5);
-    var scale = maxDisp * PARAMS.scale;
+    var dispUrl = generateDisplacementMap(w, h, RADIUS, clampedBezel, profile, maxDisp);
+    var specUrl = generateSpecularMap(w, h, RADIUS, clampedBezel * 2.5);
+    var scale = maxDisp * P.scale;
 
     document.getElementById('svg-defs').innerHTML =
         '<filter id="liquid-glass-filter" x="0%" y="0%" width="100%" height="100%">' +
-            '<feGaussianBlur in="SourceGraphic" stdDeviation="' + PARAMS.blur + '" result="blurred_source" />' +
-            '<feImage href="' + dispUrl + '" x="0" y="0" width="' + W + '" height="' + H + '" result="disp_map" />' +
+            '<feGaussianBlur in="SourceGraphic" stdDeviation="' + P.blur + '" result="blurred_source" />' +
+            '<feImage href="' + dispUrl + '" x="0" y="0" width="' + w + '" height="' + h + '" result="disp_map" />' +
             '<feDisplacementMap in="blurred_source" in2="disp_map" scale="' + scale + '" xChannelSelector="R" yChannelSelector="G" result="displaced" />' +
-            '<feColorMatrix in="displaced" type="saturate" values="' + PARAMS.specSat + '" result="displaced_sat" />' +
-            '<feImage href="' + specUrl + '" x="0" y="0" width="' + W + '" height="' + H + '" result="spec_layer" />' +
+            '<feColorMatrix in="displaced" type="saturate" values="' + P.specSat + '" result="displaced_sat" />' +
+            '<feImage href="' + specUrl + '" x="0" y="0" width="' + w + '" height="' + h + '" result="spec_layer" />' +
             '<feComposite in="displaced_sat" in2="spec_layer" operator="in" result="spec_masked" />' +
             '<feComponentTransfer in="spec_layer" result="spec_faded">' +
-                '<feFuncA type="linear" slope="' + PARAMS.specOpacity + '" />' +
+                '<feFuncA type="linear" slope="' + P.specOpacity + '" />' +
             '</feComponentTransfer>' +
             '<feBlend in="spec_masked" in2="displaced" mode="normal" result="with_sat" />' +
             '<feBlend in="spec_faded" in2="with_sat" mode="normal" />' +
@@ -288,44 +369,51 @@ function rebuildFilter() {
 }
 
 // ===================================================================
-// 拖动 → Go __dragMove(dx, dy) / __dragEnd()
+// 拖拽
 // ===================================================================
-var dragging = false, lastSX = 0, lastSY = 0;
-var glass = document.getElementById('glass');
-
-glass.addEventListener('pointerdown', function(e) {
-    if (e.button !== 0) return;
-    glass.setPointerCapture(e.pointerId);
-    dragging = true;
-    lastSX = e.screenX; lastSY = e.screenY;
-    e.preventDefault();
-});
-
-glass.addEventListener('pointermove', function(e) {
-    if (!dragging) return;
-    var dx = e.screenX - lastSX;
-    var dy = e.screenY - lastSY;
-    lastSX = e.screenX; lastSY = e.screenY;
-    if (window.__dragMove) window.__dragMove(Math.round(dx), Math.round(dy));
-});
-
-glass.addEventListener('pointerup', function(e) {
-    if (!dragging) return;
-    glass.releasePointerCapture(e.pointerId);
-    dragging = false;
-    if (window.__dragEnd) window.__dragEnd();
-});
-
-// 右键菜单
-glass.addEventListener('contextmenu', function(e) {
-    e.preventDefault();
-    if (window.__contextMenu) window.__contextMenu();
-});
+(function() {
+    var glass = document.getElementById('glass');
+    var sx, sy;
+    glass.addEventListener('pointerdown', function(e) {
+        e.preventDefault();
+        sx = e.clientX;
+        sy = e.clientY;
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', function() {
+            document.removeEventListener('pointermove', onMove);
+        }, { once: true });
+    });
+    function onMove(e) {
+        e.preventDefault();
+        glass.style.left = glass.offsetLeft + e.clientX - sx + 'px';
+        glass.style.top  = glass.offsetTop  + e.clientY - sy + 'px';
+        sx = e.clientX;
+        sy = e.clientY;
+    }
+})();
 
 // ===================================================================
-// 启动
+// 初始化
 // ===================================================================
-rebuildFilter();
+var _rebuildTimer;
+
+function init() {
+    var glass = document.getElementById('glass');
+    glass.style.left = ((window.innerWidth - 250) / 2) + 'px';
+    glass.style.top  = ((window.innerHeight - 88) / 2) + 'px';
+    setState(1);
+    // 双 rAF 确保布局完成
+    requestAnimationFrame(function() {
+        requestAnimationFrame(rebuildFilter);
+    });
+}
+
+window.addEventListener('resize', function() {
+    clearTimeout(_rebuildTimer);
+    _rebuildTimer = setTimeout(rebuildFilter, 150);
+});
+
+window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
