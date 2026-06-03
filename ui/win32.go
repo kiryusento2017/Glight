@@ -70,10 +70,13 @@ const (
 	wmCommand     = 0x0111
 	wmNcHitTest   = 0x0084
 	wmRButtonUp   = 0x0205
+	wmLButtonUp   = 0x0202
+	wmNcRButtonUp = 0x00A5
 	wmLButtonDblclk = 0x0203
 	wmTray        = 0x0400 + 1 // WM_APP-ish 自定义托盘回调
 	wmTimer       = 0x0113
 	htCaption     = 2
+	htTransparent = ^uintptr(0) // HTTRANSPARENT = -1，鼠标穿透到下层窗口
 
 	swHide           = 0
 	swShowNoActivate = 4

@@ -94,6 +94,8 @@ func New(cfgPath string, cfg config.Config) *Window {
 	// 定时器在主线程（含拖动模态循环）周期恢复 topmost。
 	procSetTimer.Call(hwnd, 1, 300, 0)
 
+	w.addTrayIcon()
+
 	return w
 }
 
@@ -104,6 +106,7 @@ func (w *Window) SetState(s state.State) {
 
 // Run 跑主线程消息循环，阻塞至窗口销毁。
 func (w *Window) Run() {
+	defer w.removeTrayIcon()
 	var m MSG
 	for {
 		r, _, _ := procGetMessageW.Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0)
@@ -120,12 +123,23 @@ func (w *Window) Run() {
 func wndProc(hwnd, message, wParam, lParam uintptr) uintptr {
 	switch message {
 	case wmNcHitTest:
+		if theWindow.cfg.ClickThrough {
+			return htTransparent // 穿透模式：鼠标落到下层窗口
+		}
 		return htCaption
 	case wmDestroy:
 		procPostQuitMessage.Call(0)
 		return 0
 	case wmTimer:
 		procSetWindowPos.Call(hwnd, hwndTopmost, 0, 0, 0, 0, swpNoMove|swpNoSize|swpNoActivate)
+		return 0
+	case wmTray:
+		if lParam == wmRButtonUp || lParam == wmLButtonUp {
+			theWindow.showContextMenu()
+		}
+		return 0
+	case wmNcRButtonUp:
+		theWindow.showContextMenu()
 		return 0
 	}
 	r, _, _ := procDefWindowProcW.Call(hwnd, message, wParam, lParam)
@@ -176,5 +190,87 @@ func (w *Window) renderThread() {
 			first = false
 		}
 		time.Sleep(16 * time.Millisecond)
+	}
+}
+
+// addTrayIcon 注册系统托盘图标，鼠标事件回调为 wmTray 消息。
+func (w *Window) addTrayIcon() {
+	var tip [128]uint16
+	for i, c := range windows.StringToUTF16("Claude Traffic Light") {
+		if i >= len(tip) {
+			break
+		}
+		tip[i] = c
+	}
+	hIcon, _, _ := procLoadIconW.Call(0, idiApplication)
+	nid := NOTIFYICONDATAW{
+		CbSize:           uint32(unsafe.Sizeof(NOTIFYICONDATAW{})),
+		HWnd:             w.hwnd,
+		UID:              1,
+		UFlags:           nifIcon | nifTip | nifMessage,
+		UCallbackMessage: wmTray,
+		HIcon:            windows.Handle(hIcon),
+		SzTip:            tip,
+	}
+	procShellNotifyIconW.Call(nimAdd, uintptr(unsafe.Pointer(&nid)))
+}
+
+// removeTrayIcon 移除托盘图标。
+func (w *Window) removeTrayIcon() {
+	nid := NOTIFYICONDATAW{
+		CbSize: uint32(unsafe.Sizeof(NOTIFYICONDATAW{})),
+		HWnd:   w.hwnd,
+		UID:    1,
+	}
+	procShellNotifyIconW.Call(nimDelete, uintptr(unsafe.Pointer(&nid)))
+}
+
+// showContextMenu 弹出右键菜单：显示/隐藏窗口、开启/关闭穿透、退出。
+// 穿透开启后窗口本体不接收鼠标，此菜单经托盘图标触发。
+func (w *Window) showContextMenu() {
+	menu, _, _ := procCreatePopupMenu.Call()
+	defer procDestroyMenu.Call(menu)
+
+	visLabel := "隐藏窗口"
+	if !w.cfg.Visible {
+		visLabel = "显示窗口"
+	}
+	procAppendMenuW.Call(menu, mfString, menuShowHide, uintptr(unsafe.Pointer(u16(visLabel))))
+
+	ptFlags := uintptr(mfString)
+	ptLabel := "开启穿透"
+	if w.cfg.ClickThrough {
+		ptFlags |= mfChecked
+		ptLabel = "关闭穿透"
+	}
+	procAppendMenuW.Call(menu, ptFlags, menuPassthrough, uintptr(unsafe.Pointer(u16(ptLabel))))
+
+	procAppendMenuW.Call(menu, mfSeparator, 0, 0)
+	procAppendMenuW.Call(menu, mfString, menuExit, uintptr(unsafe.Pointer(u16("退出"))))
+
+	var pt POINT
+	procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
+	procSetForegroundWindow.Call(uintptr(w.hwnd))
+
+	cmd, _, _ := procTrackPopupMenu.Call(menu,
+		tpmReturnCmd|tpmRightAlign|tpmBottomAlign,
+		uintptr(pt.X), uintptr(pt.Y), 0, uintptr(w.hwnd), 0)
+
+	switch cmd {
+	case menuShowHide:
+		w.cfg.Visible = !w.cfg.Visible
+		if w.cfg.Visible {
+			procSetWindowPos.Call(uintptr(w.hwnd), hwndTopmost, 0, 0, 0, 0,
+				swpNoMove|swpNoSize|swpNoActivate|swpShowWindow)
+		} else {
+			procShowWindow.Call(uintptr(w.hwnd), swHide)
+		}
+		config.Save(w.cfgPath, w.cfg)
+	case menuPassthrough:
+		w.cfg.ClickThrough = !w.cfg.ClickThrough
+		setPassthrough(w.hwnd, w.cfg.ClickThrough)
+		config.Save(w.cfgPath, w.cfg)
+	case menuExit:
+		procDestroyWindow.Call(uintptr(w.hwnd))
 	}
 }
