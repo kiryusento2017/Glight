@@ -1,11 +1,16 @@
 # 构建产物
 *.exe
 
-# 运行时配置（窗口位置/穿透/可见性，每台机器不同）
+# 运行时配置（窗口位置/穿透/可见性 + 玻璃调参，每台机器不同）
 config.json
+glass-tuning.json
 
 # spike 抓图
 *_capture.png
 
 # Claude skill 缓存
 .superpowers/
+
+# Claude 本地数据 / 液态玻璃参考仓库（不入库）
+.claude/
+_liquid-glass-ref/

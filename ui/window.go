@@ -2,6 +2,8 @@ package ui
 
 import (
 	"math"
+	"os"
+	"path/filepath"
 	"runtime"
 	"sync/atomic"
 	"syscall"
@@ -15,9 +17,12 @@ import (
 	"claude-traffic-light/state"
 )
 
+// winW/winH 是窗口画布尺寸；玻璃 pill 逻辑尺寸（250×88）在 glass.hlsl 内，
+// 居中在画布里，多出的 margin 容纳形变（稳态拉伸 + 松手过冲）。两者须与
+// glass.hlsl 的 CANVAS 常量保持一致。
 const (
-	winW = 250
-	winH = 88
+	winW = 290
+	winH = 150
 )
 
 // theWindow 是当前唯一的挂件窗口（单实例由 main.go 的互斥保证）。
@@ -27,12 +32,13 @@ var theWindow *Window
 // Window 管理浮动挂件窗口：主线程跑消息循环，渲染在独立 goroutine，
 // 拖动的系统模态循环挡不住渲染。
 type Window struct {
-	hwnd     windows.HWND
-	hInst    windows.Handle
-	cfg      config.Config
-	cfgPath  string
-	curState atomic.Int32 // state.State
-	closing  atomic.Bool
+	hwnd       windows.HWND
+	hInst      windows.Handle
+	cfg        config.Config
+	cfgPath    string
+	tuningPath string // glass-tuning.json（exe 同目录，渲染线程热重载）
+	curState   atomic.Int32 // state.State
+	closing    atomic.Bool
 }
 
 // New 创建挂件窗口并启动渲染线程。必须在将要跑消息循环的线程上调用。
@@ -41,6 +47,11 @@ func New(cfgPath string, cfg config.Config) *Window {
 	setThreadDPIAware()
 
 	w := &Window{cfg: cfg, cfgPath: cfgPath}
+	// glass-tuning.json 与 config.json 同目录；首次运行生成默认文件供用户编辑。
+	w.tuningPath = filepath.Join(filepath.Dir(cfgPath), "glass-tuning.json")
+	if _, err := os.Stat(w.tuningPath); os.IsNotExist(err) {
+		config.SaveTuning(w.tuningPath, config.DefaultTuning())
+	}
 	w.curState.Store(int32(state.Grey))
 	theWindow = w
 
@@ -188,7 +199,17 @@ func (w *Window) renderThread() {
 
 	start := time.Now()
 	first := true
+	tun, _ := config.LoadTuning(w.tuningPath) // 视觉参数初值（不存在→默认）
+	reloadN := 0
 	for !w.closing.Load() {
+		// 每 ~60 帧（约 0.5s）热重载 glass-tuning.json：保存即生效
+		reloadN++
+		if reloadN >= 60 {
+			reloadN = 0
+			if nt, err := config.LoadTuning(w.tuningPath); err == nil {
+				tun = nt
+			}
+		}
 		var wr RECT
 		procGetWindowRect.Call(uintptr(w.hwnd), uintptr(unsafe.Pointer(&wr)))
 		srv, _ := capt.AcquireTexture(wr) // 桌面静止时复用上一帧 SRV
@@ -196,7 +217,7 @@ func (w *Window) renderThread() {
 			active := float32(w.curState.Load())
 			t := time.Since(start).Seconds()
 			blink := float32(0.5 + 0.5*math.Sin(2*math.Pi*t/0.85))
-			renderer.Frame(rtv, srv, active, blink)
+			renderer.Frame(rtv, srv, active, blink, 1.0, 1.0, tun) // 第二步：形变恒 1（静止），视觉参数热重载
 			comCall(swapchain, vtSwapPresent, 0, 0)
 		}
 		if first {

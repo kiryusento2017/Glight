@@ -4,6 +4,8 @@ import (
 	_ "embed"
 	"fmt"
 	"unsafe"
+
+	"claude-traffic-light/config"
 )
 
 //go:embed glass.hlsl
@@ -16,7 +18,7 @@ type Renderer struct {
 	vs   uintptr
 	ps   uintptr
 	samp uintptr
-	cbuf uintptr // constant buffer：uActive + uBlink
+	cbuf uintptr // constant buffer：状态/形变 + glass-tuning 视觉参数（64 字节）
 }
 
 // newRenderer 编译 glass.hlsl 并建立折射管线（用渲染 device dev / context ctx）。
@@ -61,8 +63,8 @@ func newRenderer(dev, ctx uintptr) (*Renderer, error) {
 		return nil, fmt.Errorf("CreateSamplerState: 0x%X", uint32(hr))
 	}
 
-	// constant buffer：16 字节（uActive, uBlink, 2×pad），DEFAULT + UpdateSubresource
-	bd := bufferDesc{ByteWidth: 16, Usage: d3d11UsageDefault, BindFlags: d3d11BindCBuf}
+	// constant buffer：64 字节（状态/形变 4 + tuning 视觉参数 + pad），DEFAULT + UpdateSubresource
+	bd := bufferDesc{ByteWidth: 64, Usage: d3d11UsageDefault, BindFlags: d3d11BindCBuf}
 	var cbuf uintptr
 	if hr := comCall(dev, vtDevCreateBuffer,
 		uintptr(unsafe.Pointer(&bd)), 0, uintptr(unsafe.Pointer(&cbuf))); failed(hr) {
@@ -76,11 +78,17 @@ func newRenderer(dev, ctx uintptr) (*Renderer, error) {
 }
 
 // Frame 把 desktopSRV 折射绘制到 rtv（全屏三角，3 顶点），叠加红绿灯。不 Present。
-// active: 0灰/1绿/2黄/3红；blink: 0~1 闪烁亮度。
-func (r *Renderer) Frame(rtv, desktopSRV uintptr, active, blink float32) {
+// active: 0灰/1绿/2黄/3红；blink: 0~1 闪烁亮度；scaleX/scaleY: 形变缩放（1=原尺寸）；
+// t: glass-tuning 视觉参数（圆角/折射/调色/三灯）。params 布局须与 glass.hlsl cbuffer 一致。
+func (r *Renderer) Frame(rtv, desktopSRV uintptr, active, blink, scaleX, scaleY float32, t config.Tuning) {
 	ctx := r.ctx
 
-	params := [4]float32{active, blink, 0, 0}
+	params := [16]float32{
+		active, blink, scaleX, scaleY,
+		t.CornerR, t.CornerN, t.RefractBand, t.EdgeSqueeze,
+		t.Contrast, t.Brightness, t.Saturate, t.LampR,
+		t.LampGap, t.Glow, 0, 0,
+	}
 	comCall(ctx, vtCtxUpdateSubresource, r.cbuf, 0, 0,
 		uintptr(unsafe.Pointer(&params[0])), 0, 0)
 
