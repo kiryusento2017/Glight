@@ -97,7 +97,7 @@ func (c *Capture) AcquireTexture(winRect RECT) (srv uintptr, ok bool) {
 	// 取新桌面帧；无新帧（桌面静止/拖动中）则沿用整屏缓存 c.full，
 	// 这样窗口移动时仍按当前位置裁剪、折射跟随，无需等新 duplication 帧，
 	// 拖动期间零整屏拷贝，顺滑。
-	_ = c.dup.GetImage(c.full, 0)
+	_ = c.dup.GetImage(c.full, 10) // 10ms 超时：timeout 0 可能在桌面变化时恰好错过 DWM 帧
 
 	ox := int(winRect.Left) - c.bounds.Min.X
 	oy := int(winRect.Top) - c.bounds.Min.Y

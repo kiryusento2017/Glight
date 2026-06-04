@@ -13,20 +13,22 @@ import (
 // 实时写入的状态词，比解析 transcript 实时、准确。
 // 每 3s 检查 Claude Code 进程是否还在——不在则切灰色。
 type Watcher struct {
-	statePath string
-	onChange  func(state.State)
-	stop      chan struct{}
-	last      state.State
-	tickN     int
+	statePath     string
+	onChange      func(state.State)
+	stop          chan struct{}
+	last          state.State
+	tickN         int
+	claudeRunning bool // 上次进程检测结果，初始 true（启动时可能已在运行）
 }
 
 // New 创建状态文件监测器。statePath 是 hook 写、挂件读的状态文件路径。
 func New(statePath string, onChange func(state.State)) *Watcher {
 	return &Watcher{
-		statePath: statePath,
-		onChange:  onChange,
-		stop:      make(chan struct{}),
-		last:      state.Grey,
+		statePath:     statePath,
+		onChange:      onChange,
+		stop:          make(chan struct{}),
+		last:          state.Grey,
+		claudeRunning: true, // 保守假设进程在运行，避免启动时错误灭灯
 	}
 }
 
@@ -50,8 +52,11 @@ func (w *Watcher) Watch() {
 func (w *Watcher) poll() {
 	s := w.read()
 	w.tickN++
-	if w.tickN%30 == 0 && !isClaudeCodeRunning() {
-		s = state.Grey // 进程不在，强制灭灯
+	if w.tickN%30 == 0 {
+		w.claudeRunning = isClaudeCodeRunning() // 每 3s 刷新一次进程检测
+	}
+	if !w.claudeRunning {
+		s = state.Grey // 进程不在，每个 tick 都强制灰色
 	}
 	if s != w.last {
 		w.last = s
