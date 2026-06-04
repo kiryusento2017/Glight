@@ -79,10 +79,6 @@ func New(cfgPath string, cfg config.Config) *Window {
 	// 命门：把窗口从屏幕捕获中排除，断开「自己折射自己」反馈
 	procSetWindowDisplayAffinity.Call(hwnd, wdaExcludeFromCapture)
 
-	if cfg.ClickThrough {
-		setPassthrough(w.hwnd, true)
-	}
-
 	go w.renderThread()
 
 	if cfg.Visible {
@@ -124,10 +120,10 @@ func (w *Window) Run() {
 func wndProc(hwnd, message, wParam, lParam uintptr) uintptr {
 	switch message {
 	case wmNcHitTest:
-		if theWindow.cfg.ClickThrough {
-			return htTransparent // 穿透模式：鼠标落到下层窗口
+		if theWindow.cfg.Locked {
+			return htClient // 固定位置：当作客户区，不可拖动
 		}
-		return htCaption
+		return htCaption // 否则整窗可拖
 	case wmDestroy:
 		procPostQuitMessage.Call(0)
 		return 0
@@ -245,8 +241,7 @@ func (w *Window) removeTrayIcon() {
 	procShellNotifyIconW.Call(nimDelete, uintptr(unsafe.Pointer(&nid)))
 }
 
-// showContextMenu 弹出右键菜单：显示/隐藏窗口、开启/关闭穿透、退出。
-// 穿透开启后窗口本体不接收鼠标，此菜单经托盘图标触发。
+// showContextMenu 弹出右键菜单：显示/隐藏窗口、固定/不固定位置、退出。
 func (w *Window) showContextMenu() {
 	menu, _, _ := procCreatePopupMenu.Call()
 	defer procDestroyMenu.Call(menu)
@@ -257,13 +252,13 @@ func (w *Window) showContextMenu() {
 	}
 	procAppendMenuW.Call(menu, mfString, menuShowHide, uintptr(unsafe.Pointer(u16(visLabel))))
 
-	ptFlags := uintptr(mfString)
-	ptLabel := "开启穿透"
-	if w.cfg.ClickThrough {
-		ptFlags |= mfChecked
-		ptLabel = "关闭穿透"
+	lockFlags := uintptr(mfString)
+	lockLabel := "固定位置"
+	if w.cfg.Locked {
+		lockFlags |= mfChecked
+		lockLabel = "不固定位置"
 	}
-	procAppendMenuW.Call(menu, ptFlags, menuPassthrough, uintptr(unsafe.Pointer(u16(ptLabel))))
+	procAppendMenuW.Call(menu, lockFlags, menuLock, uintptr(unsafe.Pointer(u16(lockLabel))))
 
 	procAppendMenuW.Call(menu, mfSeparator, 0, 0)
 	procAppendMenuW.Call(menu, mfString, menuExit, uintptr(unsafe.Pointer(u16("退出"))))
@@ -286,9 +281,8 @@ func (w *Window) showContextMenu() {
 			procShowWindow.Call(uintptr(w.hwnd), swHide)
 		}
 		config.Save(w.cfgPath, w.cfg)
-	case menuPassthrough:
-		w.cfg.ClickThrough = !w.cfg.ClickThrough
-		setPassthrough(w.hwnd, w.cfg.ClickThrough)
+	case menuLock:
+		w.cfg.Locked = !w.cfg.Locked
 		config.Save(w.cfgPath, w.cfg)
 	case menuExit:
 		procDestroyWindow.Call(uintptr(w.hwnd))

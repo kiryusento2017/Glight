@@ -7,15 +7,15 @@ import (
 )
 
 type Config struct {
-	X            int  `json:"x"`
-	Y            int  `json:"y"`
-	ClickThrough bool `json:"click_through"`
-	Visible      bool `json:"visible"`
+	X       int  `json:"x"`
+	Y       int  `json:"y"`
+	Locked  bool `json:"locked"` // 固定位置（锁定后不可拖动）
+	Visible bool `json:"visible"`
 }
 
 // Default returns the out-of-box config. X=-1 means "center screen at runtime".
 func Default() Config {
-	return Config{X: -1, Y: 16, ClickThrough: false, Visible: true}
+	return Config{X: -1, Y: 16, Locked: false, Visible: true}
 }
 
 func Load(path string) (Config, error) {

@@ -41,6 +41,7 @@ func main() {
 	// 自动把状态 hook 合并进 ~/.claude/settings.json（幂等、只增不删、先备份）
 	installHooks()
 
+	ui.SetProcessDPIAware() // 进程级 DPI 感知（创建窗口前，替代 manifest）
 	win := ui.New(cfgPath, cfg)
 
 	w := watcher.New(hookStatePath(), func(s state.State) { win.SetState(s) })

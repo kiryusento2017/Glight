@@ -24,13 +24,12 @@ var (
 	procSetTimer         = user32.NewProc("SetTimer")
 
 	// 样式 / 定位 / DPI
-	procSetWindowLongPtrW         = user32.NewProc("SetWindowLongPtrW")
-	procGetWindowLongPtrW         = user32.NewProc("GetWindowLongPtrW")
 	procSetWindowPos              = user32.NewProc("SetWindowPos")
 	procGetWindowRect             = user32.NewProc("GetWindowRect")
 	procGetSystemMetrics          = user32.NewProc("GetSystemMetrics")
 	procSetWindowDisplayAffinity  = user32.NewProc("SetWindowDisplayAffinity")
 	procSetThreadDpiAwarenessCtx  = user32.NewProc("SetThreadDpiAwarenessContext")
+	procSetProcessDpiAwarenessCtx = user32.NewProc("SetProcessDpiAwarenessContext")
 
 	// 菜单 / 托盘
 	procCreatePopupMenu     = user32.NewProc("CreatePopupMenu")
@@ -46,9 +45,6 @@ var (
 	procGetModuleHandleW      = kernel32.NewProc("GetModuleHandleW")
 )
 
-// GWL_STYLE / GWL_EXSTYLE 为负，声明为 typed var 避免 uintptr 溢出。
-var gwlExStyle = -20
-
 // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 == (HANDLE)-4
 var dpiPerMonitorV2 = ^uintptr(3)
 
@@ -59,7 +55,6 @@ const (
 	wsExTopmost             = 0x00000008
 	wsExToolwindow          = 0x00000080
 	wsExNoactivate          = 0x08000000
-	wsExTransparent         = 0x00000020
 	wsExNoredirectionbitmap = 0x00200000
 
 	wdaExcludeFromCapture = 0x00000011
@@ -75,8 +70,8 @@ const (
 	wmLButtonDblclk = 0x0203
 	wmTray        = 0x0400 + 1 // WM_APP-ish 自定义托盘回调
 	wmTimer       = 0x0113
-	htCaption     = 2
-	htTransparent = ^uintptr(0) // HTTRANSPARENT = -1，鼠标穿透到下层窗口
+	htCaption = 2
+	htClient  = 1 // HTCLIENT：客户区，不可拖动（固定位置用）
 
 	swHide           = 0
 	swShowNoActivate = 4
@@ -110,9 +105,9 @@ const (
 
 	idiApplication = 32512
 
-	menuShowHide   = 1001
-	menuPassthrough = 1002
-	menuExit        = 1003
+	menuShowHide = 1001
+	menuLock     = 1002
+	menuExit     = 1003
 )
 
 type POINT struct{ X, Y int32 }
@@ -166,16 +161,9 @@ func sysMetric(n int) int  { r, _, _ := procGetSystemMetrics.Call(uintptr(n)); r
 // setThreadDPIAware 让当前线程 PerMonitorV2 感知，保证窗口坐标与桌面纹理同在物理像素。
 func setThreadDPIAware() { procSetThreadDpiAwarenessCtx.Call(dpiPerMonitorV2) }
 
-// setPassthrough 启用/关闭点击穿透（动态增删 WS_EX_TRANSPARENT）。
-func setPassthrough(hwnd windows.HWND, on bool) {
-	ex, _, _ := procGetWindowLongPtrW.Call(uintptr(hwnd), uintptr(gwlExStyle))
-	if on {
-		ex |= wsExTransparent
-	} else {
-		ex &^= wsExTransparent
-	}
-	procSetWindowLongPtrW.Call(uintptr(hwnd), uintptr(gwlExStyle), ex)
-}
+// SetProcessDPIAware 让整个进程 PerMonitorV2 DPI 感知（须在创建任何窗口前调用）。
+// 用代码替代 manifest，无需 rsrc/windres 外部工具，契合单 exe 零依赖。
+func SetProcessDPIAware() { procSetProcessDpiAwarenessCtx.Call(dpiPerMonitorV2) }
 
 // screenCenter 返回让 width×height 的窗口居中所需的左上角坐标。
 func screenCenter(width, height int) (x, y int) {
