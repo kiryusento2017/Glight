@@ -39,8 +39,9 @@ const (
 	vtRelease        = 2
 
 	// ID3D11Device
-	vtDevCreateBuffer  = 3
-	vtDevCreateSRV     = 7
+	vtDevCreateBuffer    = 3
+	vtDevCreateTexture2D = 5
+	vtDevCreateSRV       = 7
 	vtDevCreateRTV     = 9
 	vtDevCreateVS      = 12
 	vtDevCreatePS      = 15
@@ -143,6 +144,15 @@ type subresourceData struct {
 	pSysMem    uintptr
 	rowPitch   uint32
 	depthPitch uint32
+}
+
+// D3D11_TEXTURE2D_DESC（字段顺序与 C ABI 一致）
+type texture2DDesc struct {
+	Width, Height, MipLevels, ArraySize uint32
+	Format                              uint32
+	SampleDesc                          dxgiSampleDesc
+	Usage, BindFlags                    uint32
+	CPUAccessFlags, MiscFlags           uint32
 }
 
 type viewport struct{ TopLeftX, TopLeftY, Width, Height, MinDepth, MaxDepth float32 }
