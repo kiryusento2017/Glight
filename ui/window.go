@@ -58,6 +58,7 @@ type Window struct {
 	curW    atomic.Int32
 	curH    atomic.Int32
 	sizeDlg windows.HWND // 调整大小滑块窗（0=未打开），单实例
+	hIcon   windows.Handle
 
 	// 弹簧形变状态（主线程鼠标事件写，渲染线程每帧积分读；sync.Mutex 保护）
 	deformMu sync.Mutex
@@ -67,7 +68,7 @@ type Window struct {
 }
 
 // New 创建挂件窗口并启动渲染线程。必须在将要跑消息循环的线程上调用。
-func New(cfgPath string, cfg config.Config) *Window {
+func New(cfgPath string, cfg config.Config, iconData []byte) *Window {
 	runtime.LockOSThread()
 	setThreadDPIAware()
 
@@ -128,6 +129,15 @@ func New(cfgPath string, cfg config.Config) *Window {
 
 	// 命门：把窗口从屏幕捕获中排除，断开「自己折射自己」反馈
 	procSetWindowDisplayAffinity.Call(hwnd, wdaExcludeFromCapture)
+
+	// 运行时加载嵌入的 .ico（32px 图标从 ico 数据解析），设窗口 + 托盘
+	hIcon := loadIconFromICO(iconData)
+	if hIcon != 0 {
+		h := windows.Handle(hIcon)
+		w.hIcon = h
+		procSendMessageW.Call(hwnd, wmSetIcon, iconSmall, hIcon)
+		procSendMessageW.Call(hwnd, wmSetIcon, iconBig, hIcon)
+	}
 
 	go w.renderThread()
 
@@ -426,6 +436,45 @@ func (w *Window) renderThread() {
 	}
 }
 
+// loadIconFromICO 从内存 .ico 数据中找到 32×32 图像并创建 HICON。
+// 零外部依赖、零文件 IO。
+func loadIconFromICO(ico []byte) uintptr {
+	if len(ico) < 6 {
+		return 0
+	}
+	count := int(uint16(ico[4]) | uint16(ico[5])<<8)
+	if count == 0 || len(ico) < 6+count*16 {
+		return 0
+	}
+	// 找 32×32 条目：.ico width/height 存为 byte（0 表示 256）
+	var bestOffset, bestSize uint32
+	for i := range count {
+		off := 6 + i*16
+		iw, ih := int(ico[off]), int(ico[off+1])
+		if iw == 0 {
+			iw = 256
+		}
+		if ih == 0 {
+			ih = 256
+		}
+		size := uint32(ico[off+8]) | uint32(ico[off+9])<<8 | uint32(ico[off+10])<<16 | uint32(ico[off+11])<<24
+		offset := uint32(ico[off+12]) | uint32(ico[off+13])<<8 | uint32(ico[off+14])<<16 | uint32(ico[off+15])<<24
+		bestOffset, bestSize = offset, size
+		if iw == 32 {
+			bestOffset, bestSize = offset, size
+			break
+		}
+	}
+	if int(bestOffset)+int(bestSize) > len(ico) {
+		return 0
+	}
+	hIcon, _, _ := procCreateIconFromResourceEx.Call(
+		uintptr(unsafe.Pointer(&ico[bestOffset])), uintptr(bestSize),
+		1, 0x00030000, 0, 0, 0, // LR_DEFAULTCOLOR
+	)
+	return hIcon
+}
+
 // addTrayIcon 注册系统托盘图标，鼠标事件回调为 wmTray 消息。
 func (w *Window) addTrayIcon() {
 	var tip [128]uint16
@@ -435,14 +484,18 @@ func (w *Window) addTrayIcon() {
 		}
 		tip[i] = c
 	}
-	hIcon, _, _ := procLoadIconW.Call(0, idiApplication)
+	hicon := w.hIcon
+	if hicon == 0 {
+		h, _, _ := procLoadIconW.Call(0, idiApplication)
+		hicon = windows.Handle(h)
+	}
 	nid := NOTIFYICONDATAW{
 		CbSize:           uint32(unsafe.Sizeof(NOTIFYICONDATAW{})),
 		HWnd:             w.hwnd,
 		UID:              1,
 		UFlags:           nifIcon | nifTip | nifMessage,
 		UCallbackMessage: wmTray,
-		HIcon:            windows.Handle(hIcon),
+		HIcon:            hicon,
 		SzTip:            tip,
 	}
 	procShellNotifyIconW.Call(nimAdd, uintptr(unsafe.Pointer(&nid)))
@@ -477,6 +530,14 @@ func (w *Window) showContextMenu() {
 	}
 	procAppendMenuW.Call(menu, lockFlags, menuLock, uintptr(unsafe.Pointer(u16(lockLabel))))
 
+	startupFlags := uintptr(mfString)
+	startupLabel := "开机自动启动"
+	if w.cfg.Startup {
+		startupFlags |= mfChecked
+		startupLabel = "取消开机自启"
+	}
+	procAppendMenuW.Call(menu, startupFlags, menuStartup, uintptr(unsafe.Pointer(u16(startupLabel))))
+
 	procAppendMenuW.Call(menu, mfString, menuResize, uintptr(unsafe.Pointer(u16("调整大小…"))))
 	procAppendMenuW.Call(menu, mfString, menuReset, uintptr(unsafe.Pointer(u16("重置大小和位置"))))
 
@@ -503,6 +564,11 @@ func (w *Window) showContextMenu() {
 		config.Save(w.cfgPath, w.cfg)
 	case menuLock:
 		w.cfg.Locked = !w.cfg.Locked
+		config.Save(w.cfgPath, w.cfg)
+	case menuStartup:
+		w.cfg.Startup = !w.cfg.Startup
+		exePath, _ := os.Executable()
+		config.ToggleAutostart(exePath, w.cfg.Startup)
 		config.Save(w.cfgPath, w.cfg)
 	case menuResize:
 		w.openSizeDialog()

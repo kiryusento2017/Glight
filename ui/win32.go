@@ -59,6 +59,10 @@ var (
 	procInitCommonControlsEx = comctl32.NewProc("InitCommonControlsEx")
 	procGetStockObject       = gdi32.NewProc("GetStockObject")
 	procSetBkMode            = gdi32.NewProc("SetBkMode")
+
+	// 运行时图标嵌入（纯内存，不用外部文件）
+	procCreateIconFromResourceEx        = user32.NewProc("CreateIconFromResourceEx")
+	procLookupIconIdFromDirectoryEx     = user32.NewProc("LookupIconIdFromDirectoryEx")
 )
 
 // INITCOMMONCONTROLSEX：注册 comctl32 控件类（trackbar 在 ICC_BAR_CLASSES）。
@@ -109,6 +113,10 @@ const (
 	tbsHorz     = 0x00000000
 	tbsNoticks  = 0x00000010
 
+	wmSetIcon       = 0x0080
+	iconBig         = 1
+	iconSmall       = 0
+
 	wmHScroll       = 0x0114
 	wmSetFont       = 0x0030
 	wmCtlColorStatic = 0x0138
@@ -156,6 +164,7 @@ const (
 
 	menuShowHide = 1001
 	menuLock     = 1002
+	menuStartup  = 1006
 	menuReset    = 1004
 	menuResize   = 1005
 	menuExit     = 1003

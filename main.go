@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"os"
 	"path/filepath"
 	"unsafe"
@@ -12,6 +13,9 @@ import (
 	"claude-traffic-light/ui"
 	"claude-traffic-light/watcher"
 )
+
+//go:embed claude-traffic-light.ico
+var icoData []byte // 运行时图标资源（256+32+16 三合一 .ico）
 
 var (
 	kernel32              = windows.NewLazySystemDLL("kernel32.dll")
@@ -38,11 +42,14 @@ func main() {
 	cfgPath := filepath.Join(filepath.Dir(exePath), "config.json")
 	cfg, _ := config.Load(cfgPath)
 
+	// 路径自校正：exe 换盘/改名则更新注册表；config 与注册表双向对齐
+	config.SyncAutostart(exePath, cfg.Startup)
+
 	// 自动把状态 hook 合并进 ~/.claude/settings.json（幂等、只增不删、先备份）
 	installHooks()
 
 	ui.SetProcessDPIAware() // 进程级 DPI 感知（创建窗口前，替代 manifest）
-	win := ui.New(cfgPath, cfg)
+	win := ui.New(cfgPath, cfg, icoData)
 
 	w := watcher.New(hookStatePath(), func(s state.State) { win.SetState(s) })
 	go w.Watch()

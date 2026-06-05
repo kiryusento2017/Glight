@@ -9,9 +9,10 @@ import (
 type Config struct {
 	X       int     `json:"x"`
 	Y       int     `json:"y"`
-	Locked  bool    `json:"locked"` // 固定位置（锁定后不可拖动）
+	Locked  bool    `json:"locked"`  // 固定位置（锁定后不可拖动）
 	Visible bool    `json:"visible"`
-	Scale   float64 `json:"scale"` // 整体缩放（1.0=默认大小，拖角放大，最小 1.0）
+	Scale   float64 `json:"scale"`   // 整体缩放（1.0=默认大小，最小 1.0）
+	Startup bool    `json:"startup"` // 开机自动启动（HKCU Run 注册表）
 }
 
 // Default returns the out-of-box config. X=-1 means "center screen at runtime".
