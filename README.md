@@ -2,8 +2,6 @@
 
 Windows 桌面液态玻璃红绿灯挂件，实时显示 [Claude Code](https://claude.ai/code) 工作状态。**上班 vibe coding 时余光一扫就知道 AI 在干嘛。**
 
-> 单文件 `.exe`，扔 U 盘即插即用，不装任何运行时。
-
 ## 系统要求
 
 | 要求 | 说明 |
