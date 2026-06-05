@@ -80,7 +80,7 @@ func newRenderer(dev, ctx uintptr) (*Renderer, error) {
 // Frame 把 desktopSRV 折射绘制到 rtv（全屏三角，3 顶点），叠加红绿灯。不 Present。
 // active: 0灰/1绿/2黄/3红；blink: 0~1 闪烁亮度；scaleX/scaleY: 形变缩放（1=原尺寸）；
 // t: glass-tuning 视觉参数（圆角/折射/调色/三灯）。params 布局须与 glass.hlsl cbuffer 一致。
-func (r *Renderer) Frame(rtv, desktopSRV uintptr, active, blink, scaleX, scaleY float32, t config.Tuning) {
+func (r *Renderer) Frame(rtv, desktopSRV uintptr, active, blink, scaleX, scaleY, canvasW, canvasH float32, t config.Tuning) {
 	ctx := r.ctx
 
 	params := [16]float32{
@@ -92,7 +92,7 @@ func (r *Renderer) Frame(rtv, desktopSRV uintptr, active, blink, scaleX, scaleY 
 	comCall(ctx, vtCtxUpdateSubresource, r.cbuf, 0, 0,
 		uintptr(unsafe.Pointer(&params[0])), 0, 0)
 
-	vp := viewport{Width: winW, Height: winH, MaxDepth: 1}
+	vp := viewport{Width: canvasW, Height: canvasH, MaxDepth: 1}
 	comCall(ctx, vtCtxRSSetViewports, 1, uintptr(unsafe.Pointer(&vp)))
 
 	rtvs := [1]uintptr{rtv}

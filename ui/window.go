@@ -21,9 +21,13 @@ import (
 // winW/winH 是窗口画布尺寸；玻璃 pill 逻辑尺寸（250×88）在 glass.hlsl 内，
 // 居中在画布里，多出的 margin 容纳形变（稳态拉伸 + 松手过冲）。两者须与
 // glass.hlsl 的 CANVAS 常量保持一致。
+// winW/winH 画布尺寸：收紧到 pill 视觉 + 形变峰值的包络，死区最小。
+// pillW/pillH 是玻璃逻辑尺寸（须与 glass.hlsl 的 PILL 一致），居中在画布内。
 const (
-	winW = 270
-	winH = 160
+	winW  = 240
+	winH  = 128
+	pillW = 230
+	pillH = 96
 )
 
 // theWindow 是当前唯一的挂件窗口（单实例由 main.go 的互斥保证）。
@@ -49,6 +53,11 @@ type Window struct {
 	speedX     float32
 	speedY     float32
 	pressed    atomic.Bool
+
+	// 当前窗口像素尺寸：滑块窗缩放时写，渲染线程每帧读以决定是否 resize swapchain/capture
+	curW    atomic.Int32
+	curH    atomic.Int32
+	sizeDlg windows.HWND // 调整大小滑块窗（0=未打开），单实例
 
 	// 弹簧形变状态（主线程鼠标事件写，渲染线程每帧积分读；sync.Mutex 保护）
 	deformMu sync.Mutex
@@ -94,8 +103,13 @@ func New(cfgPath string, cfg config.Config) *Window {
 	}
 	procRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc)))
 
+	// 初始窗口像素尺寸 = 基准 × 缩放（cfg.Scale 已在 config.Load 兜底 ≥1.0）
+	iw, ih := scaledWindow(cfg.Scale)
+	w.curW.Store(iw)
+	w.curH.Store(ih)
+
 	// 位置：水平居中、贴屏幕顶部（Y=16），或使用保存的位置
-	x, _ := screenCenter(winW, winH)
+	x, _ := screenCenter(int(iw), int(ih))
 	y := 16
 	if cfg.X >= 0 {
 		x, y = cfg.X, cfg.Y
@@ -107,7 +121,7 @@ func New(cfgPath string, cfg config.Config) *Window {
 		uintptr(unsafe.Pointer(className)),
 		uintptr(unsafe.Pointer(u16("Claude Traffic Light"))),
 		wsPopup,
-		uintptr(x), uintptr(y), winW, winH,
+		uintptr(x), uintptr(y), uintptr(iw), uintptr(ih),
 		0, 0, uintptr(hInst), 0,
 	)
 	w.hwnd = windows.HWND(hwnd)
@@ -152,8 +166,33 @@ func (w *Window) Run() {
 	w.closing.Store(true)
 }
 
-// wndProc 处理窗口消息。自接管鼠标拖拽（取消系统 caption 拖动），获取按下/移动/松开
-// 事件以驱动弹簧形变；Locked 模式保留按压反馈但不挪窗。右键菜单改为客户区右键。
+// scaledWindow 返回缩放 scale 后的窗口像素尺寸（基准 winW×winH）。scale<1 钳到 1。
+func scaledWindow(scale float64) (int32, int32) {
+	if scale < 1.0 {
+		scale = 1.0
+	}
+	return int32(math.Round(winW * scale)), int32(math.Round(winH * scale))
+}
+
+// pillBox 返回可见胶囊（含 steady 形变）在客户区的包围盒（物理像素）。
+// pw,ph 为当前窗口像素尺寸；胶囊视觉 = pillW×pillH × steady 形变，居中于画布。
+func (w *Window) pillBox(pw, ph int32) (lx, rx, ty, by float64) {
+	scale := float64(pw) / winW
+	halfX := float64(pillW) * 0.5 * float64(w.steadyX) * scale
+	halfY := float64(pillH) * 0.5 * float64(w.steadyY) * scale
+	cx, cy := float64(pw)*0.5, float64(ph)*0.5
+	return cx - halfX, cx + halfX, cy - halfY, cy + halfY
+}
+
+// inPill 判断客户区坐标 (cx,cy) 是否在可见胶囊包围盒内（拖动响应区，矩形贴合）。
+func (w *Window) inPill(cx, cy, pw, ph int32) bool {
+	lx, rx, ty, by := w.pillBox(pw, ph)
+	return float64(cx) >= lx && float64(cx) <= rx &&
+		float64(cy) >= ty && float64(cy) <= by
+}
+
+// wndProc 处理窗口消息。自接管鼠标拖拽（取消系统 caption 拖动）做拖动移位 + 弹簧形变；
+// 点可见胶囊外不响应。缩放改由右键菜单的滑块窗控制（不再拖角缩放）。
 func wndProc(hwnd, message, wParam, lParam uintptr) uintptr {
 	switch message {
 	case wmNcHitTest:
@@ -166,15 +205,20 @@ func wndProc(hwnd, message, wParam, lParam uintptr) uintptr {
 		return 1
 
 	case wmLButtonDown:
-		theWindow.pressed.Store(true)
 		var pt POINT
 		procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
+		var wr RECT
+		procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&wr)))
+		cliX, cliY := pt.X-wr.Left, pt.Y-wr.Top
+		pw, ph := wr.Right-wr.Left, wr.Bottom-wr.Top
+		if !theWindow.inPill(cliX, cliY, pw, ph) {
+			return 0 // 点在可见胶囊外：透明死区不响应（不误拖）
+		}
+		theWindow.pressed.Store(true)
 		theWindow.dragStart = pt
 		theWindow.lastCursor = pt
 		theWindow.speedX = 0
 		theWindow.speedY = 0
-		var wr RECT
-		procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&wr)))
 		theWindow.winStart = POINT{X: wr.Left, Y: wr.Top}
 		procSetCapture.Call(hwnd)
 		// 按软：横向胀、纵向扁
@@ -242,6 +286,10 @@ func wndProc(hwnd, message, wParam, lParam uintptr) uintptr {
 
 	case wmTimer:
 		procSetWindowPos.Call(hwnd, hwndTopmost, 0, 0, 0, 0, swpNoMove|swpNoSize|swpNoActivate)
+		// 滑块窗开着时，提顶挂件后再提滑块窗，保证它始终在胶囊之上可操作（即使被放大的胶囊覆盖）
+		if theWindow.sizeDlg != 0 {
+			procSetWindowPos.Call(uintptr(theWindow.sizeDlg), hwndTopmost, 0, 0, 0, 0, swpNoMove|swpNoSize|swpNoActivate)
+		}
 		return 0
 
 	case wmTray:
@@ -281,9 +329,12 @@ func (w *Window) renderThread() {
 	if err != nil {
 		return
 	}
-	if _, err := dcompAttach(dxgiDevice, uintptr(w.hwnd), swapchain); err != nil {
+	dcompDevice, visual, err := dcompAttach(dxgiDevice, uintptr(w.hwnd), swapchain)
+	if err != nil {
 		return
 	}
+	// swapchain/capture 当前像素尺寸（基准创建），随窗口缩放在循环内 resize
+	scW, scH := int32(winW), int32(winH)
 
 	// 建抓屏与折射渲染器；任一失败则降级为不渲染（Task 9 完善重试）
 	capt, err := newCapture(dev, dctx)
@@ -336,6 +387,25 @@ func (w *Window) renderThread() {
 		sx, sy := w.deform[0].Pos, w.deform[1].Pos
 		w.deformMu.Unlock()
 
+		// 滑块窗缩放：窗口尺寸变化 → resize swapchain + 重建 RTV + resize 桌面捕获 + 刷新 DComp
+		if dW, dH := w.curW.Load(), w.curH.Load(); dW != scW || dH != scH {
+			comRelease(rtv)
+			rtv = 0
+			if err := resizeSwapchain(swapchain, uint32(dW), uint32(dH)); err == nil {
+				rtv, _ = backBufferRTV(dev, swapchain)
+				capt.Resize(int(dW), int(dH))
+				comCall(visual, vtDCompVisualSetContent, swapchain)
+				comCall(dcompDevice, vtDCompCommit)
+				scW, scH = dW, dH
+			} else {
+				rtv, _ = backBufferRTV(dev, swapchain) // 尽力恢复，避免空 RTV
+			}
+		}
+		if rtv == 0 {
+			time.Sleep(8 * time.Millisecond)
+			continue
+		}
+
 		var wr RECT
 		procGetWindowRect.Call(uintptr(w.hwnd), uintptr(unsafe.Pointer(&wr)))
 		srv, _ := capt.AcquireTexture(wr) // 桌面静止时复用上一帧 SRV
@@ -343,7 +413,7 @@ func (w *Window) renderThread() {
 			active := float32(w.curState.Load())
 			t := time.Since(start).Seconds()
 			blink := float32(0.5 + 0.5*math.Sin(2*math.Pi*t/0.85))
-			renderer.Frame(rtv, srv, active, blink, sx, sy, tun)
+			renderer.Frame(rtv, srv, active, blink, sx, sy, float32(scW), float32(scH), tun)
 			comCall(swapchain, vtSwapPresent, 0, 0)
 		}
 		if first {
@@ -407,6 +477,9 @@ func (w *Window) showContextMenu() {
 	}
 	procAppendMenuW.Call(menu, lockFlags, menuLock, uintptr(unsafe.Pointer(u16(lockLabel))))
 
+	procAppendMenuW.Call(menu, mfString, menuResize, uintptr(unsafe.Pointer(u16("调整大小…"))))
+	procAppendMenuW.Call(menu, mfString, menuReset, uintptr(unsafe.Pointer(u16("重置大小和位置"))))
+
 	procAppendMenuW.Call(menu, mfSeparator, 0, 0)
 	procAppendMenuW.Call(menu, mfString, menuExit, uintptr(unsafe.Pointer(u16("退出"))))
 
@@ -430,6 +503,20 @@ func (w *Window) showContextMenu() {
 		config.Save(w.cfgPath, w.cfg)
 	case menuLock:
 		w.cfg.Locked = !w.cfg.Locked
+		config.Save(w.cfgPath, w.cfg)
+	case menuResize:
+		w.openSizeDialog()
+	case menuReset:
+		// 重置：100% 大小 + 屏幕水平居中贴顶（Y=16）
+		w.cfg.Scale = 1.0
+		nw, nh := scaledWindow(1.0)
+		nx, _ := screenCenter(int(nw), int(nh))
+		ny := 16
+		w.cfg.X, w.cfg.Y = nx, ny
+		w.curW.Store(nw)
+		w.curH.Store(nh)
+		procSetWindowPos.Call(uintptr(w.hwnd), 0, uintptr(nx), uintptr(ny),
+			uintptr(int(nw)), uintptr(int(nh)), swpNoZOrder|swpNoActivate)
 		config.Save(w.cfgPath, w.cfg)
 	case menuExit:
 		procDestroyWindow.Call(uintptr(w.hwnd))

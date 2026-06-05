@@ -9,6 +9,8 @@ var (
 	shell32  = windows.NewLazySystemDLL("shell32.dll")
 	dwmapi   = windows.NewLazySystemDLL("dwmapi.dll")
 	kernel32 = windows.NewLazySystemDLL("kernel32.dll")
+	comctl32 = windows.NewLazySystemDLL("comctl32.dll")
+	gdi32    = windows.NewLazySystemDLL("gdi32.dll")
 
 	// 窗口创建与消息循环
 	procRegisterClassExW = user32.NewProc("RegisterClassExW")
@@ -48,7 +50,19 @@ var (
 
 	procDwmSetWindowAttribute = dwmapi.NewProc("DwmSetWindowAttribute")
 	procGetModuleHandleW      = kernel32.NewProc("GetModuleHandleW")
+
+	// 调整大小滑块窗：trackbar + button + static
+	procSendMessageW         = user32.NewProc("SendMessageW")
+	procGetDlgItem           = user32.NewProc("GetDlgItem")
+	procSetWindowTextW       = user32.NewProc("SetWindowTextW")
+	procGetSysColorBrush     = user32.NewProc("GetSysColorBrush")
+	procInitCommonControlsEx = comctl32.NewProc("InitCommonControlsEx")
+	procGetStockObject       = gdi32.NewProc("GetStockObject")
+	procSetBkMode            = gdi32.NewProc("SetBkMode")
 )
+
+// INITCOMMONCONTROLSEX：注册 comctl32 控件类（trackbar 在 ICC_BAR_CLASSES）。
+type initCommonControlsEx struct{ DwSize, DwICC uint32 }
 
 // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 == (HANDLE)-4
 var dpiPerMonitorV2 = ^uintptr(3)
@@ -83,7 +97,33 @@ const (
 	idcArrow  = 32512
 
 	swHide           = 0
+	swShow           = 5
 	swShowNoActivate = 4
+
+	// 滑块窗：窗口/控件样式、消息、trackbar 常量
+	wsChild     = 0x40000000
+	wsCaption   = 0x00C00000
+	wsSysmenu   = 0x00080000
+	ssCenter    = 0x00000001
+	bsPushbutton = 0x00000000
+	tbsHorz     = 0x00000000
+	tbsNoticks  = 0x00000010
+
+	wmHScroll       = 0x0114
+	wmSetFont       = 0x0030
+	wmCtlColorStatic = 0x0138
+
+	tbmGetPos      = 0x0400 // WM_USER
+	tbmSetPos      = 0x0405 // WM_USER+5
+	tbmSetRange    = 0x0406 // WM_USER+6
+	tbmSetPageSize = 0x0415 // WM_USER+21
+	tbThumbTrack   = 5       // WM_HSCROLL 通知码：拖动中（连续）
+	tbEndTrack     = 8       // WM_HSCROLL 通知码：结束拖动
+
+	iccBarClasses  = 0x00000004
+	defaultGuiFont = 17
+	colorBtnface   = 15
+	bkTransparent  = 1
 
 	hwndTopmost      = ^uintptr(0) // (HWND)-1
 	swpNoMove        = 0x0002
@@ -116,6 +156,8 @@ const (
 
 	menuShowHide = 1001
 	menuLock     = 1002
+	menuReset    = 1004
+	menuResize   = 1005
 	menuExit     = 1003
 )
 

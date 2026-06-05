@@ -67,8 +67,9 @@ const (
 	vtFactory2CreateSwapComp = 24
 
 	// IDXGISwapChain
-	vtSwapPresent   = 8
-	vtSwapGetBuffer = 9
+	vtSwapPresent       = 8
+	vtSwapGetBuffer     = 9
+	vtSwapResizeBuffers = 13
 
 	// IDCompositionDevice
 	vtDCompCommit           = 3
@@ -206,23 +207,33 @@ func createCompositionSwapchain(factory, device uintptr, w, h uint32) (uintptr, 
 }
 
 // dcompAttach 为 hwnd 建立 DirectComposition 设备/目标/视觉，把 swapchain
-// 作为内容挂上并 Commit。返回的 dcompDevice 由调用方持有（后续可再 Commit）。
-func dcompAttach(dxgiDevice, hwnd, swapchain uintptr) (dcompDevice uintptr, err error) {
+// 作为内容挂上并 Commit。返回 dcompDevice 与 visual 由调用方持有：缩放时
+// swapchain ResizeBuffers 后需重新 SetContent + Commit 让 DComp 刷新尺寸。
+func dcompAttach(dxgiDevice, hwnd, swapchain uintptr) (dcompDevice, visual uintptr, err error) {
 	if hr, _, _ := procDCompositionCreateDevice.Call(dxgiDevice,
 		uintptr(unsafe.Pointer(&iidIDCompositionDevice)), uintptr(unsafe.Pointer(&dcompDevice))); failed(hr) {
-		return 0, fmt.Errorf("DCompositionCreateDevice: 0x%X", uint32(hr))
+		return 0, 0, fmt.Errorf("DCompositionCreateDevice: 0x%X", uint32(hr))
 	}
-	var target, visual uintptr
+	var target uintptr
 	if hr := comCall(dcompDevice, vtDCompCreateTargetHwnd, hwnd, 1, uintptr(unsafe.Pointer(&target))); failed(hr) {
-		return 0, fmt.Errorf("CreateTargetForHwnd: 0x%X", uint32(hr))
+		return 0, 0, fmt.Errorf("CreateTargetForHwnd: 0x%X", uint32(hr))
 	}
 	if hr := comCall(dcompDevice, vtDCompCreateVisual, uintptr(unsafe.Pointer(&visual))); failed(hr) {
-		return 0, fmt.Errorf("CreateVisual: 0x%X", uint32(hr))
+		return 0, 0, fmt.Errorf("CreateVisual: 0x%X", uint32(hr))
 	}
 	comCall(visual, vtDCompVisualSetContent, swapchain)
 	comCall(target, vtDCompTargetSetRoot, visual)
 	comCall(dcompDevice, vtDCompCommit)
-	return dcompDevice, nil
+	return dcompDevice, visual, nil
+}
+
+// resizeSwapchain 把合成 swapchain 的后台缓冲改到 w×h（保留缓冲数/格式/flags）。
+// 调用前须释放所有后台缓冲引用（RTV），调用后重建 RTV。
+func resizeSwapchain(swapchain uintptr, w, h uint32) error {
+	if hr := comCall(swapchain, vtSwapResizeBuffers, 0, uintptr(w), uintptr(h), 0, 0); failed(hr) {
+		return fmt.Errorf("ResizeBuffers: 0x%X", uint32(hr))
+	}
+	return nil
 }
 
 // backBufferRTV 取 swapchain 后台缓冲并创建 RenderTargetView。

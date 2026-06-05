@@ -31,7 +31,7 @@ cbuffer Params : register(b0) {
     float2 _pad;
 };
 
-static const float2 CANVAS = float2(270.0, 160.0); // 画布像素尺寸（= winW/winH）
+static const float2 CANVAS = float2(240.0, 128.0); // 画布像素尺寸（= winW/winH）：收紧到形变峰值包络，死区最小
 static const float2 PILL   = float2(230.0, 96.0);  // 玻璃逻辑尺寸（≈2.4:1）
 
 struct VSOut {

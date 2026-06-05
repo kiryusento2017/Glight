@@ -26,9 +26,11 @@ type Capture struct {
 	full   *image.RGBA                // 整屏帧缓冲
 
 	rctx uintptr // 渲染 device context（UpdateSubresource）
+	rdev uintptr // 渲染 device（Resize 时重建纹理/SRV）
 	tex  uintptr // 渲染 device 上的桌面纹理
 	srv  uintptr // 供 shader 采样
-	buf  []byte  // winW×winH×4 裁剪缓冲（RGBA）
+	buf  []byte  // w×h×4 裁剪缓冲（RGBA）
+	w, h int     // 当前桌面纹理尺寸（随窗口缩放变化）
 }
 
 // newCapture 在渲染 device(rdev/rctx) 上建桌面 SRV 纹理，并启动 Desktop Duplication。
@@ -79,8 +81,9 @@ func newCapture(rdev, rctx uintptr) (*Capture, error) {
 	c := &Capture{
 		dup: dup, gdev: gdev, gctx: gctx,
 		bounds: bounds, full: image.NewRGBA(bounds),
-		rctx: rctx, tex: tex, srv: srv,
+		rctx: rctx, rdev: rdev, tex: tex, srv: srv,
 		buf: make([]byte, winW*winH*4),
+		w:   winW, h: winH,
 	}
 	// 预热：抓一帧整屏填充缓存，避免首帧全黑（拖动时也从此缓存裁剪）
 	for i := 0; i < 10; i++ {
@@ -103,13 +106,13 @@ func (c *Capture) AcquireTexture(winRect RECT) (srv uintptr, ok bool) {
 	oy := int(winRect.Top) - c.bounds.Min.Y
 	dw, dh := c.bounds.Dx(), c.bounds.Dy()
 	stride := c.full.Stride
-	const dstRow = winW * 4
+	dstRow := c.w * 4
 
 	// 裁剪（屏幕坐标→full 坐标），越界像素填黑——拖到屏幕边缘也不 panic
-	for y := 0; y < winH; y++ {
+	for y := 0; y < c.h; y++ {
 		drow := c.buf[y*dstRow : (y+1)*dstRow]
 		sy := oy + y
-		for x := 0; x < winW; x++ {
+		for x := 0; x < c.w; x++ {
 			di := x * 4
 			sx := ox + x
 			if sy < 0 || sy >= dh || sx < 0 || sx >= dw {
@@ -127,6 +130,40 @@ func (c *Capture) AcquireTexture(winRect RECT) (srv uintptr, ok bool) {
 	comCall(c.rctx, vtCtxUpdateSubresource, c.tex, 0, 0,
 		uintptr(unsafe.Pointer(&c.buf[0])), uintptr(dstRow), 0)
 	return c.srv, true
+}
+
+// Resize 把桌面纹理/SRV/裁剪缓冲重建到 w×h（窗口缩放时调用）。
+// 失败保持旧尺寸不变（best-effort，下一帧再试）。
+func (c *Capture) Resize(w, h int) error {
+	if w == c.w && h == c.h {
+		return nil
+	}
+	if w < 1 || h < 1 {
+		return fmt.Errorf("invalid size %dx%d", w, h)
+	}
+	desc := texture2DDesc{
+		Width: uint32(w), Height: uint32(h), MipLevels: 1, ArraySize: 1,
+		Format:     dxgiFormatR8G8B8A8,
+		SampleDesc: dxgiSampleDesc{Count: 1},
+		Usage:      d3d11UsageDefault,
+		BindFlags:  d3d11BindSRV,
+	}
+	var tex uintptr
+	if hr := comCall(c.rdev, vtDevCreateTexture2D,
+		uintptr(unsafe.Pointer(&desc)), 0, uintptr(unsafe.Pointer(&tex))); failed(hr) {
+		return fmt.Errorf("Resize CreateTexture2D: 0x%X", uint32(hr))
+	}
+	var srv uintptr
+	if hr := comCall(c.rdev, vtDevCreateSRV, tex, 0, uintptr(unsafe.Pointer(&srv))); failed(hr) {
+		comRelease(tex)
+		return fmt.Errorf("Resize CreateShaderResourceView: 0x%X", uint32(hr))
+	}
+	comRelease(c.srv)
+	comRelease(c.tex)
+	c.tex, c.srv = tex, srv
+	c.buf = make([]byte, w*h*4)
+	c.w, c.h = w, h
+	return nil
 }
 
 // Release 释放 duplication、device 与 GPU 资源。

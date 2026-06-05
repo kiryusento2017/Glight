@@ -7,7 +7,7 @@ import (
 
 func TestRoundtrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
-	in := Config{X: 42, Y: 99, Locked: true, Visible: false}
+	in := Config{X: 42, Y: 99, Locked: true, Visible: false, Scale: 1.5}
 	if err := Save(path, in); err != nil {
 		t.Fatal(err)
 	}
