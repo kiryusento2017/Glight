@@ -76,7 +76,7 @@ float4 PSMain(VSOut i) : SV_Target {
 
     // 玻璃形状：连续曲率圆角矩形（形变后半尺寸 = pill 半尺寸 × scale）
     float2 half = PILL * 0.5 * float2(uScaleX, uScaleY);
-    float  rr   = min(uCornerR, min(half.x, half.y)); // 圆角不得超过半尺寸
+    float  rr   = uCornerR; // 可以超过半尺寸：直边消失→全曲率 squircle（shuding 原版 cornerR=0.6 即 3× 半高）
     float  d    = squircleSDF(p, half, rr, uCornerN); // <0 内部
 
     // 折射（移植 shuding/liquid-glass 折射核）：中心一大片清晰平台(scaled=1 零位移)，
