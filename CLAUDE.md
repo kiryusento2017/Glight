@@ -23,6 +23,13 @@ C:\Open Source Projects\go\bin\go.exe test ./...
 
 工作目录：`D:\vs code projects\claude code light`
 
+### exe 文件图标（踩坑警示）
+
+窗口/托盘图标走 `main.go` 的 `//go:embed claude-traffic-light.ico`（运行时）；**exe 文件图标**（资源管理器里）是另一套，靠 `rsrc_windows_amd64.syso` 链接时嵌入。
+
+- `.syso` 已 gitignore，缺失时重新生成：`go run github.com/akavel/rsrc@latest -ico claude-traffic-light.ico -o rsrc_windows_amd64.syso`
+- **文件名必须是 `rsrc_windows_amd64.syso`**（带平台后缀 go build 才自动挑）。**严禁**再多生成一个 `rsrc.syso`——两个 `.syso` 含资源段 → 链接报 `too many .rsrc sections`，构建必失败。
+
 ## 架构
 
 ### 模块分层（目标架构，方案2）
