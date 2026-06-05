@@ -45,7 +45,7 @@ func DefaultTuning() Tuning {
 		Saturate:    1.5,
 		LampR:       19,
 		LampGap:     64,
-		Glow:        0.1,
+		Glow:        0,
 		SpringK:    120,
 		SpringC:    8,
 		SteadyX:    0.91,
