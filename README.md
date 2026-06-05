@@ -4,9 +4,17 @@ Windows 桌面液态玻璃红绿灯挂件，实时显示 [Claude Code](https://c
 
 > 单文件 `.exe`，扔 U 盘即插即用，不装任何运行时。
 
+## 系统要求
+
+| 要求 | 说明 |
+|---|---|
+| **操作系统** | **仅 Windows 11（64 位）**。不支持 macOS / Linux（依赖 DirectComposition + Desktop Duplication，无跨平台计划） |
+| **Claude Code** | 需本机已安装 [Claude Code](https://claude.ai/code) CLI。这是一个**专为 Claude Code 设计**的状态指示器，不支持 Cursor / Copilot / 其他 AI 工具 |
+| **运行时** | 无。单个原生 `.exe`，不依赖 Node / .NET / 任何框架 |
+
 ## 效果
 
-一块悬浮在桌面上的**液态玻璃胶囊**，透过它能看到真实桌面被折射扭曲。中间三盏红绿灯：
+一块悬浮在桌面上的**液态玻璃胶囊**，透过它能看到真实桌面被折射扭曲。中间三盏红绿灯实时反映 Claude Code 状态：
 
 | 灯 | 含义 | Claude Code 状态 |
 |---|---|---|
@@ -19,10 +27,21 @@ Windows 桌面液态玻璃红绿灯挂件，实时显示 [Claude Code](https://c
 
 **整体缩放**：右键「调整大小…」弹出滑块窗，100%~2000% 无极缩放整个挂件（顶边固定、向下扩展），大小和位置自动记忆，下次启动恢复；可一键重置回默认。
 
+## 关于 Claude Code
+
+这个挂件靠 **Claude Code 的 Hooks 机制**实时感知状态，而非轮询 transcript：
+
+- **首次运行**会把 4 条 hook 规则幂等合并进 `~/.claude/settings.json`（先备份、只增不删、已存在不重复加）。
+- 每次 Claude Code 触发生命周期事件，hook 直接调挂件自己写状态文件，挂件 100ms 内反映到灯上。
+- **自动灭灯**：每 3s 检测 `claude.exe` 进程，关掉 Claude Code 后最多 3s 三灯熄灭。
+- hook handler 就是挂件 `.exe` 自身（`claude-traffic-light.exe hook <state>`），**零外部依赖**。
+
+> 如果本机没装 Claude Code，挂件能正常运行，但因检测不到状态会一直保持灰色（三灯全灭）。
+
 ## 安装与使用
 
 1. 从 [Releases](../../releases) 下载 `claude-traffic-light.exe`
-2. 双击运行
+2. 双击运行（首次运行会自动安装 Claude Code hook，见上）
 3. 打开 Claude Code，开始 vibe coding
 4. **拖动**：按住可见胶囊拖拽移位（点胶囊外的透明区无反应）
 5. **右键菜单**：调整大小… / 隐藏 / 固定位置 / 重置大小和位置 / 退出
@@ -31,7 +50,7 @@ Windows 桌面液态玻璃红绿灯挂件，实时显示 [Claude Code](https://c
 
 ## 写入的文件
 
-首次运行及后续使用中，挂件会在以下位置读/写文件。**不会修改任何系统文件。**
+首次运行及后续使用中，挂件会在以下位置读/写文件。**不修改任何系统文件，不写注册表。**
 
 | 路径 | 内容 | 说明 |
 |---|---|---|
@@ -39,14 +58,14 @@ Windows 桌面液态玻璃红绿灯挂件，实时显示 [Claude Code](https://c
 | `~/.claude/settings.json.bak` | 修改前的原文件 | 只在首次 hook 安装时创建一次 |
 | `~/.claude/agent-light-state` | 状态词（`idle`/`thinking`/`running`） | 每次 Claude Code hook 触发时覆盖写入 |
 | `./config.json` | 窗口位置 + 锁定/可见性 + 缩放比例 | 退出 / 调整大小时保存，exe 同目录 |
-| `./glass-tuning.json` | 全部视觉与形变参数 | 首次运行自动生成，手工编辑热重载
+| `./glass-tuning.json` | 全部视觉与形变参数 | 首次运行自动生成，手工编辑热重载 |
 
 ## 架构
 
 ```
 main.go             入口：单实例互斥 → 加载配置 → 安装 hook → 创建窗口 → 启动监测
 hookinstall.go      把状态 hook 幂等合并进 ~/.claude/settings.json
-config/             配置读写（config.json 窗口位置 + glass-tuning.json 视觉热重载）
+config/             配置读写（config.json 窗口位置/缩放 + glass-tuning.json 视觉热重载）
 state/              四态枚举（灰/绿/黄/红）及优先级
 watcher/            每 100ms 读 hook 状态文件 + 每 3s 检测 claude.exe 进程
 ui/
@@ -113,6 +132,13 @@ go test ./...
 ## 技术栈
 
 Go + D3D11 + DirectComposition + HLSL（无 WebView2、无 Electron、无 CGO）
+
+## 限制 / 范围外
+
+- **仅 Windows 11**，不支持 macOS / Linux
+- **仅 Claude Code**，不支持其他 AI 工具
+- 点击穿透：DComp 透明置顶窗无法穿透到下层，胶囊外透明区会挡住下层窗口点击（已知限制）
+- 无声音提示、无多显示器自动定位
 
 ## 许可
 
