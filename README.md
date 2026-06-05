@@ -29,7 +29,7 @@ Windows 桌面液态玻璃红绿灯挂件，实时显示 [Claude Code](https://c
 
 这个挂件靠 **Claude Code 的 Hooks 机制**实时感知状态，而非轮询 transcript：
 
-- **首次运行**会把 4 条 hook 规则幂等合并进 `~/.claude/settings.json`（先备份、只增不删、已存在不重复加）。
+- **首次运行**检测 `~/.claude/settings.json`：如果存在（本机已装 Claude Code）则幂等合并 4 条 hook 规则（先备份、只增不删、已存在不重复加）；**如果不存在则静默跳过，不创建任何文件或目录**——不在没装 Claude Code 的机器上写任何东西。
 - 每次 Claude Code 触发生命周期事件，hook 直接调挂件自己写状态文件，挂件 100ms 内反映到灯上。
 - **自动灭灯**：每 3s 检测 `claude.exe` 进程，关掉 Claude Code 后最多 3s 三灯熄灭。
 - hook handler 就是挂件 `.exe` 自身（`claude-traffic-light.exe hook <state>`），**零外部依赖**。

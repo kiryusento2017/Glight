@@ -23,9 +23,10 @@ var hookEvents = []struct {
 }
 
 // installHooks 把挂件的 4 个状态 hook 安全合并进 ~/.claude/settings.json。
-// 原则：幂等（已存在则只更新自己那条的路径，绝不重复加）、只增不删（别人的
-// 配置一字不动）、先备份（写前存 settings.json.bak）。任何异常都安静放弃，
-// 不让 hook 安装影响挂件启动。
+// 原则：settings.json 必须已存在（即本机已装 Claude Code）才合并；不存在则
+// 静默跳过——不在没装 Claude Code 的机器上创建任何目录或文件。
+// 已有文件时：幂等（已存在则只更新自己那条的路径，绝不重复加）、只增不删
+// （别人的配置一字不动）、先备份（写前存 settings.json.bak）。
 func installHooks() {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -37,16 +38,14 @@ func installHooks() {
 	}
 	settingsPath := filepath.Join(home, ".claude", "settings.json")
 
-	// 读现有 settings（不存在 = 空对象；解析失败则不冒险动它）
-	var root map[string]interface{}
-	orig, readErr := os.ReadFile(settingsPath)
-	if readErr == nil {
-		if json.Unmarshal(orig, &root) != nil {
-			return
-		}
+	// 读现有 settings。文件不存在 = 本机没装 Claude Code → 静默跳过，不创建。
+	orig, err := os.ReadFile(settingsPath)
+	if err != nil {
+		return
 	}
-	if root == nil {
-		root = map[string]interface{}{}
+	var root map[string]interface{}
+	if json.Unmarshal(orig, &root) != nil {
+		return
 	}
 
 	hooks, _ := root["hooks"].(map[string]interface{})
@@ -69,10 +68,8 @@ func installHooks() {
 	if err != nil {
 		return
 	}
-	// 先备份原文件（若存在），再写回
-	if readErr == nil {
-		os.WriteFile(settingsPath+".bak", orig, 0644)
-	}
+	// 先备份原文件，再写回（能走到这里说明原文件已存在且读取成功）
+	os.WriteFile(settingsPath+".bak", orig, 0644)
 	os.WriteFile(settingsPath, out, 0644)
 }
 
