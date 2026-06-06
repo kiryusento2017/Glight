@@ -6,7 +6,7 @@ Windows 桌面液态玻璃红绿灯挂件，实时显示 [Claude Code](https://c
 
 | 要求 | 说明 |
 |---|---|
-| **操作系统** | **仅 Windows 11（64 位）**。不支持 macOS / Linux（依赖 DirectComposition + Desktop Duplication，无跨平台计划） |
+| **操作系统** | **仅 Windows**。不支持 macOS / Linux（依赖 DirectComposition + Desktop Duplication，无跨平台计划） |
 | **Claude Code** | 需本机已安装 [Claude Code](https://claude.ai/code) CLI。这是一个**专为 Claude Code 设计**的状态指示器，不支持 Cursor / Copilot / 其他 AI 工具 |
 | **运行时** | 无。单个原生 `.exe`，不依赖 Node / .NET / 任何框架 |
 
