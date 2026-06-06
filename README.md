@@ -64,7 +64,7 @@ Windows 桌面液态玻璃红绿灯挂件，实时显示 [Claude Code](https://c
 >
 > 右键 exe →「以管理员身份运行」即可，**仅首次需要**，之后正常双击打开。
 >
-> ![权限管理：右键 exe 以管理员身份运行](权限.png)
+> ![权限管理：右键 exe 以管理员身份运行](assets/admin-permission.png)
 
 1. 从 [Releases](../../releases) 下载 `claude-traffic-light.exe`
 2. **首次**右键 exe →「以管理员身份运行」（生成配置文件）；之后正常双击运行即可

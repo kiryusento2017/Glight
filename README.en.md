@@ -62,7 +62,7 @@ This widget uses **Claude Code's Hooks mechanism** for real-time status — no t
 >
 > Right-click the exe → "Run as administrator" — **only needed the first time**. After that, just double-click normally.
 >
-> ![Running as administrator](权限.png)
+> ![Running as administrator](assets/admin-permission.png)
 
 1. Download `claude-traffic-light.exe` from [Releases](../../releases)
 2. **First launch**: right-click the exe → "Run as administrator" (to generate config files); after that, double-click normally
