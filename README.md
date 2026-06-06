@@ -181,8 +181,8 @@ WDA_EXCLUDEFROMCAPTURE 排除自身捕获，断开反馈循环
 # 普通构建（带控制台，调试用）
 go build -trimpath -buildvcs=false -o claude-traffic-light.exe .
 
-# 发布构建（无控制台窗口）
-go build -trimpath -buildvcs=false -ldflags="-H windowsgui" -o claude-traffic-light.exe .
+# 发布构建（无控制台窗口，输出到 dist/）
+go build -trimpath -buildvcs=false -ldflags="-H windowsgui" -o dist/claude-traffic-light.exe .
 
 # 测试
 go test ./...

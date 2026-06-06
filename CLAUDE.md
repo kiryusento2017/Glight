@@ -14,8 +14,8 @@ Go 不在 PATH 中，需完整路径：
 # 普通构建（带控制台，调试用）
 C:\Open Source Projects\go\bin\go.exe build -trimpath -buildvcs=false -o claude-traffic-light.exe .
 
-# 发布构建（无控制台窗口）
-C:\Open Source Projects\go\bin\go.exe build -trimpath -buildvcs=false -ldflags="-H windowsgui" -o claude-traffic-light.exe .
+# 发布构建（无控制台窗口，输出到 dist/；dist 不存在先建）
+C:\Open Source Projects\go\bin\go.exe build -trimpath -buildvcs=false -ldflags="-H windowsgui" -o dist\claude-traffic-light.exe .
 
 # 运行测试
 C:\Open Source Projects\go\bin\go.exe test ./...
@@ -31,6 +31,7 @@ C:\Open Source Projects\go\bin\go.exe test ./...
 - `-buildvcs=false`：去掉嵌入的 git revision / 提交时间 / dirty 标记。
 - 代价：调试时 panic 堆栈路径变成模块相对路径，但文件名+行号仍在，定位无碍。
 - 验证清零：`grep -a -c "用户名" claude-traffic-light.exe` 应为 0；`go version -m exe` 不应出现绝对路径或 vcs 字段。
+- **铁律：发行版 exe 必须输出到 `dist/` 文件夹**（`-o dist\claude-traffic-light.exe`），与源码/调试产物隔离。`dist/` 已 gitignore。go build 不自动建目录，dist 不存在时先 `New-Item -ItemType Directory -Force dist`（或 `mkdir dist`）。调试构建不受此约束（仍可输出到根目录）。
 
 ### exe 文件图标（踩坑警示）
 

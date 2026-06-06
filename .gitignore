@@ -1,6 +1,7 @@
 # 构建产物
 *.exe
 rsrc.syso
+dist/
 
 # 运行时配置（窗口位置/穿透/可见性 + 玻璃调参，每台机器不同）
 config.json
