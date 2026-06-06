@@ -30,7 +30,7 @@ Windows 桌面液态玻璃红绿灯挂件，实时显示 [Claude Code](https://c
 双击 `.exe` 后，挂件按以下顺序启动（**全程不修改系统文件**）：
 
 1. **单实例检查** — 已在运行则直接退出，不会开第二个。
-2. **加载配置** — 读 exe 同目录的 `config.json`（位置/缩放/可见/开机自启）和 `glass-tuning.json`（视觉/形变参数）；**两个文件都不存在则用内置默认值现生成**。
+2. **加载配置** — 读 exe 同目录的 `config.json`（位置/缩放/可见/开机自启）和 `glass-tuning.json`（视觉/形变参数）。`glass-tuning.json` 不存在则**自动生成默认文件**（供用户编辑调参）；`config.json` 不存在则**用内存默认值**（不写盘，等用户操作后才首次生成）。
 3. **同步开机自启** — 若上次开启过，校正注册表里的 exe 路径。
 4. **安装 hook（分支）**：
    - **装了 Claude Code**（`~/.claude/settings.json` 存在）→ 幂等合并 4 条状态 hook（先备份 `.bak`、只增不删、已存在不重复加）。
@@ -54,7 +54,7 @@ Windows 桌面液态玻璃红绿灯挂件，实时显示 [Claude Code](https://c
 ## 安装与使用
 
 1. 从 [Releases](../../releases) 下载 `claude-traffic-light.exe`
-2. 双击运行（首次启动自动安装 Claude Code hook，并生成默认配置文件）
+2. 双击运行（首次启动自动生成 `glass-tuning.json` 供调参；若已装 Claude Code 则自动安装 hook）
 3. 打开 Claude Code，开始 vibe coding
 4. **拖动**：按住可见胶囊拖拽移位（点胶囊外的透明区无反应）
 5. **右键菜单**（顺序同代码）：
@@ -68,6 +68,8 @@ Windows 桌面液态玻璃红绿灯挂件，实时显示 [Claude Code](https://c
 
 **调参**：编辑 exe 同目录的 `glass-tuning.json`（首次运行自动生成），保存即实时生效，无需重启。
 
+**系统托盘**：启动后任务栏右下角出现挂件图标。**右键托盘图标**弹出与右键窗口相同的菜单；**双击托盘图标**显示/隐藏窗口。
+
 ## 写入的文件
 
 首次运行及后续使用中，挂件会在以下位置读/写文件。**不修改任何系统文件。**
@@ -75,9 +77,9 @@ Windows 桌面液态玻璃红绿灯挂件，实时显示 [Claude Code](https://c
 | 路径 | 内容 | 说明 |
 |---|---|---|
 | `~/.claude/settings.json` | 4 条 hook 规则 | 首次启动幂等写入（备份 → 合并 → 写回） |
-| `~/.claude/settings.json.bak` | 修改前的原文件 | 只在首次 hook 安装时创建一次 |
+| `~/.claude/settings.json.bak` | 修改前的原文件 | hook 配置有变动时创建（exe 首次安装/换盘/改名后） |
 | `~/.claude/agent-light/agent-light-state-<session_id>` | 状态词（`idle`/`thinking`/`running`），每会话一个文件 | 每次 Claude Code hook 触发时覆盖写入 |
-| `./config.json` | 位置 + 锁定/可见/缩放/开机自启 | 退出 / 调整大小 / 切换自启时保存，exe 同目录 |
+| `./config.json` | 位置 + 锁定/可见/缩放/开机自启 | 拖动松手 / 菜单操作 / 调整大小时保存，exe 同目录 |
 | `./glass-tuning.json` | 全部视觉与形变参数 | 首次运行自动生成，手工编辑热重载 |
 
 > 若开启「开机自动启动」，会在 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 写一条注册表记录（用户空间，不弹 UAC）。取消勾选后自动删除记录。
@@ -127,7 +129,7 @@ hookinstall.go      把状态 hook 幂等合并进 ~/.claude/settings.json
 config/             配置读写（config.json 位置/缩放/开机自启 + glass-tuning.json 视觉热重载）
   autostart.go      注册表 HKCU Run 读写删 + 路径自校正（开机自动启动）
 state/              四态枚举（灰/绿/黄/红）及优先级
-watcher/            每 100ms 聚合每会话状态文件（任一会话忙=忙）+ 每 3s 检测 claude.exe 进程兜底灭灯
+watcher/            每 100ms 聚合每会话状态文件（任一会话忙=忙）+ 每 3s 进程检测兜底灭灯（procmon.go）
 ui/
   window.go           DComp 透明置顶窗、消息循环、自接管鼠标拖动、弹簧形变状态机、图标加载
   render.go           D3D11 渲染管线：device/swapchain/shader 编译 + 每帧绘制（动态 viewport）
