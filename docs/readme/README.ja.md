@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🚦 Claude Code Light
+# 🚦 Glight
+
+**Claude Code のデスクトップ信号機ステータスウィジェット · 液体ガラス質感**
 
 **デスクトップに浮かぶ液体ガラスの信号機 —— vibe coding 中、視界の隅をちらっと見るだけで AI が今なにをしているか分かる。**
 
@@ -8,11 +10,11 @@
 ![言語](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)
 ![技術](https://img.shields.io/badge/D3D11_+_DirectComposition_+_HLSL-5C2D91)
 ![ライセンス](https://img.shields.io/badge/license-MIT-green)
-[![ダウンロード](https://img.shields.io/badge/⬇_Download-Releases-success)](https://github.com/kiryusento2017/vibe-glass-light/releases)
+[![ダウンロード](https://img.shields.io/badge/⬇_Download-Releases-success)](https://github.com/kiryusento2017/Glight/releases)
 
 [简体中文](../../README.md) · [English](README.en.md) · **日本語** · [한국어](README.ko.md) · [繁體中文](README.zh-TW.md)
 
-<img src="../../assets/screenshot-wide.jpg" width="600" alt="Claude Code Light：VS Code の上に浮かぶ液体ガラスの信号機、緑が点灯" />
+<img src="../../assets/screenshot-wide.jpg" width="600" alt="Glight（Claude Code Light）：VS Code の上に浮かぶ液体ガラスの信号機、緑が点灯" />
 
 <sub>デスクトップを本当に屈折させる液体ガラスのカプセル。中央の 3 つのランプが Claude Code の状態にリアルタイムで連動します。</sub>
 
@@ -22,7 +24,7 @@
 
 ## これは何
 
-**Claude Code Light** は Windows デスクトップウィジェットです。**常に最前面に浮かぶ**液体ガラスのカプセルで、それ越しに実際のデスクトップがリアルタイムに屈折・歪んで見えます。カプセルの中央には 3 つの信号機が埋め込まれていて、**[Claude Code](https://claude.ai/code) の作業状態をリアルタイムに映し出します**——
+**Glight**（別名 Claude Code Light / Claude Code 信号機ステータスインジケーター）は Windows デスクトップウィジェットです。**常に最前面に浮かぶ**液体ガラスのカプセルで、それ越しに実際のデスクトップがリアルタイムに屈折・歪んで見えます。カプセルの中央には 3 つの信号機が埋め込まれていて、**[Claude Code](https://claude.ai/code) の作業状態をリアルタイムに映し出します**——
 
 > 赤の点滅 = ツール実行中；黄の点滅 = 思考中；緑の点灯 = アイドル（待機中）；全消灯 = 起動していない。
 
@@ -60,7 +62,7 @@
 
 **1️⃣ ダウンロード**
 
-[Releases](https://github.com/kiryusento2017/vibe-glass-light/releases) から `claude-traffic-light.exe` をダウンロードし、任意のフォルダに置きます。
+[Releases](https://github.com/kiryusento2017/Glight/releases) から `claude-traffic-light.exe` をダウンロードし、任意のフォルダに置きます。
 
 **2️⃣ 初回は管理者として実行**
 

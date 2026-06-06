@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🚦 Claude Code Light
+# 🚦 Glight
+
+**Claude Code 桌面紅綠燈狀態小工具 · 液態玻璃質感**
 
 **懸浮在桌面的液態玻璃紅綠燈 —— 上班 vibe coding 時，餘光一掃就知道 AI 在幹嘛。**
 
@@ -8,11 +10,11 @@
 ![語言](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)
 ![技術](https://img.shields.io/badge/D3D11_+_DirectComposition_+_HLSL-5C2D91)
 ![授權](https://img.shields.io/badge/license-MIT-green)
-[![下載](https://img.shields.io/badge/⬇_Download-Releases-success)](https://github.com/kiryusento2017/vibe-glass-light/releases)
+[![下載](https://img.shields.io/badge/⬇_Download-Releases-success)](https://github.com/kiryusento2017/Glight/releases)
 
 [简体中文](../../README.md) · [English](README.en.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · **繁體中文**
 
-<img src="../../assets/screenshot-wide.jpg" width="600" alt="Claude Code Light：浮在 VS Code 上的液態玻璃紅綠燈，綠燈亮起" />
+<img src="../../assets/screenshot-wide.jpg" width="600" alt="Glight（Claude Code Light）：浮在 VS Code 上的液態玻璃紅綠燈，綠燈亮起" />
 
 <sub>一塊真實折射桌面的液態玻璃膠囊，中間三盞燈即時跟著 Claude Code 的狀態走。</sub>
 
@@ -22,7 +24,7 @@
 
 ## 這是什麼
 
-**Claude Code Light** 是一個 Windows 桌面小工具：一塊**永遠懸浮在最上層**的液態玻璃膠囊，透過它能看到真實桌面被即時折射扭曲。膠囊中間嵌著三盞紅綠燈，**即時反映 [Claude Code](https://claude.ai/code) 的工作狀態**——
+**Glight**（又名 Claude Code Light / Claude Code 紅綠燈狀態燈）是一個 Windows 桌面小工具：一塊**永遠懸浮在最上層**的液態玻璃膠囊，透過它能看到真實桌面被即時折射扭曲。膠囊中間嵌著三盞紅綠燈，**即時反映 [Claude Code](https://claude.ai/code) 的工作狀態**——
 
 > 紅燈閃 = 正在執行工具；黃燈閃 = 正在思考；綠燈恆亮 = 閒置等你；全滅 = 沒在跑。
 
@@ -60,7 +62,7 @@
 
 **1️⃣ 下載**
 
-從 [Releases](https://github.com/kiryusento2017/vibe-glass-light/releases) 下載 `claude-traffic-light.exe`，放到任意資料夾。
+從 [Releases](https://github.com/kiryusento2017/Glight/releases) 下載 `claude-traffic-light.exe`，放到任意資料夾。
 
 **2️⃣ 首次以系統管理員身分執行**
 

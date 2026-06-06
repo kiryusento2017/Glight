@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🚦 Claude Code Light
+# 🚦 Glight
+
+**A Claude Code desktop status traffic-light widget · liquid-glass look**
 
 **A liquid-glass traffic light that floats on your desktop — one glance from the corner of your eye tells you what your AI is doing while you vibe code.**
 
@@ -8,11 +10,11 @@
 ![Language](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)
 ![Tech](https://img.shields.io/badge/D3D11_+_DirectComposition_+_HLSL-5C2D91)
 ![License](https://img.shields.io/badge/license-MIT-green)
-[![Download](https://img.shields.io/badge/⬇_Download-Releases-success)](https://github.com/kiryusento2017/vibe-glass-light/releases)
+[![Download](https://img.shields.io/badge/⬇_Download-Releases-success)](https://github.com/kiryusento2017/Glight/releases)
 
 [简体中文](../../README.md) · **English** · [日本語](README.ja.md) · [한국어](README.ko.md) · [繁體中文](README.zh-TW.md)
 
-<img src="../../assets/screenshot-wide.jpg" width="600" alt="Claude Code Light: a liquid-glass traffic light floating over VS Code, green light lit" />
+<img src="../../assets/screenshot-wide.jpg" width="600" alt="Glight (Claude Code Light): a liquid-glass traffic light floating over VS Code, green light lit" />
 
 <sub>A liquid-glass capsule that genuinely refracts your desktop, with three lights that track Claude Code's status in real time.</sub>
 
@@ -22,7 +24,7 @@
 
 ## What is this
 
-**Claude Code Light** is a Windows desktop widget: an **always-on-top liquid-glass capsule** that genuinely refracts the desktop behind it. Embedded in the capsule are three traffic lights that **mirror [Claude Code](https://claude.ai/code)'s working status in real time** —
+**Glight** (a.k.a. Claude Code Light / Claude Code traffic-light status indicator) is a Windows desktop widget: an **always-on-top liquid-glass capsule** that genuinely refracts the desktop behind it. Embedded in the capsule are three traffic lights that **mirror [Claude Code](https://claude.ai/code)'s working status in real time** —
 
 > Red blinking = running a tool; Yellow blinking = thinking; Green solid = idle, waiting for you; All off = not running.
 
@@ -60,7 +62,7 @@ Priority: **Red > Yellow > Green > Grey**. With multiple concurrent Claude sessi
 
 **1️⃣ Download**
 
-Grab `claude-traffic-light.exe` from [Releases](https://github.com/kiryusento2017/vibe-glass-light/releases) and put it in any folder.
+Grab `claude-traffic-light.exe` from [Releases](https://github.com/kiryusento2017/Glight/releases) and put it in any folder.
 
 **2️⃣ First launch as administrator**
 
