@@ -3,6 +3,7 @@ package ui
 import (
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -18,17 +19,22 @@ import (
 	"claude-traffic-light/state"
 )
 
-// winW/winH 是窗口画布尺寸；玻璃 pill 逻辑尺寸（250×88）在 glass.hlsl 内，
+// winW/winH 是窗口画布尺寸；玻璃 pill 逻辑尺寸（230×96）在 glass.hlsl 内，
 // 居中在画布里，多出的 margin 容纳形变（稳态拉伸 + 松手过冲）。两者须与
 // glass.hlsl 的 CANVAS 常量保持一致。
 // winW/winH 画布尺寸：收紧到 pill 视觉 + 形变峰值的包络，死区最小。
 // pillW/pillH 是玻璃逻辑尺寸（须与 glass.hlsl 的 PILL 一致），居中在画布内。
 const (
 	winW  = 240
-	winH  = 128
+	winH  = 144
 	pillW = 230
 	pillH = 96
 )
+
+// maxDragScaleY 钳制竖向拖动的目标缩放上限。竖向补偿 pressY/dragScale 在高速
+// 拖动时最高可达 2.44（pill 高 234px）远超画布；钳到 1.4（叠加弹簧过冲约到 1.5、
+// 玻璃高 ~144px）正好落进画布 winH=144，弹性自然衰减、既不撞墙也不被削平。
+const maxDragScaleY = 1.4
 
 // theWindow 是当前唯一的挂件窗口（单实例由 main.go 的互斥保证）。
 // wndProc 是包级回调，通过它访问实例。
@@ -257,8 +263,12 @@ func wndProc(hwnd, message, wParam, lParam uintptr) uintptr {
 			dragScale = sv.dragMin
 		}
 		theWindow.deformMu.Lock()
+		ty := sv.pressY / dragScale // 竖向补偿
+		if ty > maxDragScaleY {
+			ty = maxDragScaleY // 收住竖向峰值，避免拉长超出画布被削平
+		}
 		theWindow.deform[0].Target = sv.pressX * dragScale // 横向压扁后因拖动更窄
-		theWindow.deform[1].Target = sv.pressY / dragScale // 竖向补偿
+		theWindow.deform[1].Target = ty
 		theWindow.deformMu.Unlock()
 		if theWindow.cfg.Locked {
 			break // 锁定：不挪窗，但仍记下按压（视觉反馈保留）
@@ -542,6 +552,7 @@ func (w *Window) showContextMenu() {
 	procAppendMenuW.Call(menu, mfString, menuReset, uintptr(unsafe.Pointer(u16("重置大小和位置"))))
 
 	procAppendMenuW.Call(menu, mfSeparator, 0, 0)
+	procAppendMenuW.Call(menu, mfString, menuRestart, uintptr(unsafe.Pointer(u16("重启"))))
 	procAppendMenuW.Call(menu, mfString, menuExit, uintptr(unsafe.Pointer(u16("退出"))))
 
 	var pt POINT
@@ -584,7 +595,24 @@ func (w *Window) showContextMenu() {
 		procSetWindowPos.Call(uintptr(w.hwnd), 0, uintptr(nx), uintptr(ny),
 			uintptr(int(nw)), uintptr(int(nh)), swpNoZOrder|swpNoActivate)
 		config.Save(w.cfgPath, w.cfg)
+	case menuRestart:
+		w.restart()
 	case menuExit:
 		procDestroyWindow.Call(uintptr(w.hwnd))
 	}
+}
+
+// restart 重启挂件：启动一个带 --restarted 标记的新实例（它在 main 里会轮询
+// 等本进程退出、释放单实例锁后再接管），确认新进程已 Start 成功才退出本窗口。
+// 任何一步失败都保持运行、绝不"关了没开"。用于卡帧等异常时一键保底恢复。
+func (w *Window) restart() {
+	exe, err := os.Executable()
+	if err != nil {
+		return // 拿不到自身路径 → 放弃重启，保持运行
+	}
+	cmd := exec.Command(exe, "--restarted")
+	if err := cmd.Start(); err != nil {
+		return // 新进程没拉起 → 放弃重启，保持运行
+	}
+	procDestroyWindow.Call(uintptr(w.hwnd)) // 仅在确认新进程已启动后才退出
 }

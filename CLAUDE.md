@@ -35,17 +35,17 @@ C:\Open Source Projects\go\bin\go.exe test ./...
 ### 模块分层（目标架构，方案2）
 
 ```
-main.go           — 入口：单实例互斥、加载配置、开机自启同步、安装 hook、居中、启动 watcher 和窗口；含 hook 子命令模式 + //go:embed ico
-hookinstall.go    — 把状态 hook 安全合并进 ~/.claude/settings.json（幂等/备份/只增不删）
+main.go           — 入口：单实例互斥（含 --restarted 撞锁轮询）、加载配置、开机自启同步、安装 hook、居中、启动 watcher 和窗口；含 hook 子命令模式（从 stdin JSON 取 session_id 写每会话状态文件）+ //go:embed ico
+hookinstall.go    — 把状态 hook 安全合并进 ~/.claude/settings.json（幂等：靠当前 exe 真名识别、备份/只增不删）
 config/           — config.json（窗口位置/锁定/可见/缩放/开机自启）+ glass-tuning.json（视觉/形变参数）读写
   autostart.go    — HKCU Run 注册表读写删（开机自动启动）+ SyncAutostart 路径自校正 + ToggleAutostart 菜单开关
 state/            — 四态枚举（Grey/Green/Yellow/Red）和优先级聚合
-watcher/          — 100ms 轮询 hook 写的状态文件，映射四态
+watcher/          — 100ms 轮询、聚合每会话状态文件（agent-light-state-<sid>）、freshWindow 陈旧降级、cleanup 定时清理
 ui/               — 原生渲染与窗口管理（D3D11 + DComp + HLSL）
   window.go       — DComp 透明置顶窗、消息循环、托盘/菜单、自接管鼠标拖动（仅胶囊内响应）、SetState
   win32.go        — Win32 API 绑定（窗口样式、托盘、菜单、comctl32 滑块、WDA syscall）
   com.go          — 通用 comCall + D3D11/DXGI/DComp 绑定（含 swapchain ResizeBuffers）
-  capture.go      — Desktop Duplication 桌面纹理获取（支持随缩放 Resize）
+  capture.go      — Desktop Duplication 桌面纹理获取（支持随缩放 Resize + 会话切换失效后限速重建）
   render.go       — 渲染管线：device/swapchain/shader 编译 + 每帧绘制（动态 viewport）
   glass.hlsl      — 折射 + 红绿灯 shader（移植自 shuding/liquid-glass）
   physics.go      — 二阶弹簧形变物理（Euler 积分驱动按压/拖动形变）
@@ -54,7 +54,7 @@ ui/               — 原生渲染与窗口管理（D3D11 + DComp + HLSL）
 
 > `config/`、`state/`、`watcher/` 有单元测试；`watcher/` 已改为 hook 状态文件驱动（见「状态探测」）；`ui/` 为方案2 原生渲染，已实现。
 
-### 当前进度（2026-06-05）
+### 当前进度（2026-06-06）
 
 - **方案2 已实现跑通**：DComp 透明置顶窗 + Desktop Duplication + 折射 shader + 四态红绿灯，实时折射真桌面、拖动顺滑、常亮。
 - **状态检测已切到 Claude Code Hooks**（见「状态探测」），替代旧 transcript 轮询。
@@ -62,6 +62,8 @@ ui/               — 原生渲染与窗口管理（D3D11 + DComp + HLSL）
 - **开机自动启动**：右键菜单「开机自动启动」写 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`（ToggleAutostart），启动时路径自校正（SyncAutostart）；`startup` 存 config.json。
 - **运行时图标**：claude-traffic-light.ico（256/32/16）通过 `//go:embed` 嵌入 exe，`loadIconFromICO` 解析 ico，`CreateIconFromResourceEx` 设窗口 + 托盘图标（纯 Go 标准库，零外部工具）。
 - **点击穿透暂不可行**：DComp/`NOREDIRECTIONBITMAP` 窗无法穿透（已坐实），折射优先、待收尾后重构。
+- **右键菜单「重启」**：启动带 `--restarted` 标记的新实例，轮询等旧实例释放单实例锁后接管，用于卡帧等异常时一键恢复。
+- **hook 识别幂等**：改用当前 exe 真名（`filepath.Base(exe)`）识别 settings.json 中自己加的 hook，杜绝 debug 版/正式版互不相认导致重复写入。
 
 ### 渲染方案（方案2，已锁定）
 
@@ -96,12 +98,16 @@ Desktop Duplication 抓整屏桌面纹理(GPU常驻)
 
 ### 状态探测：Claude Code Hooks（实时驱动）
 
-不轮询 transcript（旧方案已废弃）。靠 Claude Code 的 4 个生命周期 hook 实时推送：挂件启动时 `installHooks` 把 hook 合并进 `~/.claude/settings.json`，每个 hook 调挂件自己 `claude-traffic-light.exe hook <state>`（**exec form**：`command`=exe 路径 + `args`，直接 spawn 不经 shell，避开 Windows「Git Bash or PowerShell」不确定性），写状态文件 `~/.claude/agent-light-state`；`watcher/` 每 100ms 读该文件映射四态。
+不轮询 transcript（旧方案已废弃）。靠 Claude Code 的 4 个生命周期 hook 实时推送：挂件启动时 `installHooks` 把 hook 合并进 `~/.claude/settings.json`（幂等：靠当前 exe 真名识别，杜绝 debug/正式版互不相认），每个 hook 调挂件自己 `claude-traffic-light.exe hook <state>`（**exec form**：`command`=exe 路径 + `args`，直接 spawn 不经 shell，避开 Windows「Git Bash or PowerShell」不确定性）。
+
+**每会话独立状态文件**：hook 从 stdin JSON 读取 `session_id`，写 `~/.claude/agent-light-state-<sid>` —— 每会话一个文件。watcher 聚合目录下所有此前缀文件：**任一会话忙 → 全局忙**（防止多 agent 并发时一个结束误拉绿）；全 idle → 绿；无文件 → 灰。
 
 - 事件→状态：`UserPromptSubmit`/`PostToolUse`→thinking、`PreToolUse`→running、`Stop`→idle
-- **自动灭灯**：每 3s 用 `CreateToolhelp32Snapshot` 检测 `claude.exe` 进程，不在则切灰（关闭 Claude Code 后最多 3s 灭灯）
+- **陈旧降级（freshWindow=120s）**：`running`/`thinking` 文件 mtime 超过 120s 未被 hook 刷新 → 降为不忙（绿），解决崩溃/强杀/未走 Stop 导致状态残留卡黄/红的 bug
+- **定时清理（cleanupWindow=10min）**：每 30s 删除超 10min 未更新的残留文件，防堆积
+- **自动灭灯兜底**：每 3s 用 `CreateToolhelp32Snapshot` 检测 `claude.exe` 进程，不在则强制灰（无论文件内容）
 - **单 exe**：hook handler 就是挂件自己，零外部依赖（不像 agent-light 要 node）
-- **安全合并**：幂等（已存在不重复加、路径变则更新）、先备份 `settings.json.bak`、只增不删别人的配置；靠 command 的 basename 识别「我加的那条」
+- **安全合并**：幂等（已存在不重复加、路径变则更新）、先备份 `settings.json.bak`、只增不删别人的配置
 
 ### 窗口架构（DComp，方案2）
 
@@ -115,7 +121,9 @@ Desktop Duplication 抓整屏桌面纹理(GPU常驻)
 
 ### 单实例
 
-`CreateMutexW("Local\\ClaudeTrafficLight_SingleInstance")`，检测到 `ERROR_ALREADY_EXISTS` 直接退出。
+`CreateMutexW("Local\\ClaudeTrafficLight_SingleInstance")`，检测到 `ERROR_ALREADY_EXISTS`：
+- 普通双开 → 直接退出
+- 带 `--restarted` 标记（右键重启）→ 轮询等旧实例退出（100ms×50=5s 超时），拿到锁后接管；超时则放弃
 
 ### WebView2（已退役）
 
@@ -129,8 +137,12 @@ Desktop Duplication 抓整屏桌面纹理(GPU常驻)
 | `settings.json` 已有 hook | 幂等：路径变则更新、未变则不写；别人的 hook 原样保留 |
 | HiDPI 125%/150% | 代码 `SetProcessDpiAwarenessContext` PerMonitorV2（替代 manifest，契合单 exe） |
 | 窗口拖动 | `WM_NCHITTEST` 恒返回 `HTCLIENT`，自接管鼠标拖动；仅点在可见胶囊内才响应（胶囊外透明区不误拖） |
-| 整体缩放 | 滑块窗设 `scale` → 渲染线程动态 resize swapchain/capture + 动态 viewport；shader CANVAS=240×128（含形变余量），pill 230×96 |
+| 整体缩放 | 滑块窗设 `scale` → 渲染线程动态 resize swapchain/capture + 动态 viewport；shader CANVAS=240×144（含形变余量），pill 230×96 |
 | 点击穿透 | DComp/`NOREDIRECTIONBITMAP` 窗无法穿透，已知限制，待重构 |
+| 状态残留 | 崩溃/强杀未走 Stop → 状态文件 mtime 过旧 → freshWindow 降级为绿，不卡黄/红 |
+| 多 agent 并发 | 每会话独立文件 + 聚合取最高优先级，一个 agent 结束不误拉绿 |
+| Desktop Duplication 失效 | 锁屏/解锁/UAC 会话切换后 GetImage 返回错误 → 限速 500ms 重建接口 + 重读 bounds，不停留在失效前最后一帧 |
+| 竖向拖动峰值 | maxDragScaleY=1.4 钳制，避免 pill 拉长超出画布被削平 |
 
 ## 范围外
 

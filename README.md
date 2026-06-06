@@ -60,7 +60,7 @@ Windows 桌面液态玻璃红绿灯挂件，实时显示 [Claude Code](https://c
 5. **右键菜单**：
    - **调整大小…** — 弹出滑块窗，100%~2000% 无极缩放，松手存盘、手动关闭
    - **开机自动启动** — 写入 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`（不弹 UAC，取消勾选即删记录）
-   - **隐藏 / 固定位置 / 重置大小和位置** — 自明
+   - **重启** — 卡帧/异常时一键重启（新实例轮询等旧实例释放锁后接管，绝不"关了没开"）
    - **退出**
 
 **调参**：编辑 exe 同目录的 `glass-tuning.json`（首次运行自动生成），保存即实时生效，无需重启。
@@ -73,7 +73,7 @@ Windows 桌面液态玻璃红绿灯挂件，实时显示 [Claude Code](https://c
 |---|---|---|
 | `~/.claude/settings.json` | 4 条 hook 规则 | 首次启动幂等写入（备份 → 合并 → 写回） |
 | `~/.claude/settings.json.bak` | 修改前的原文件 | 只在首次 hook 安装时创建一次 |
-| `~/.claude/agent-light-state` | 状态词（`idle`/`thinking`/`running`） | 每次 Claude Code hook 触发时覆盖写入 |
+| `~/.claude/agent-light-state-<session_id>` | 状态词（`idle`/`thinking`/`running`），每会话一个文件 | 每次 Claude Code hook 触发时覆盖写入 |
 | `./config.json` | 位置 + 锁定/可见/缩放/开机自启 | 退出 / 调整大小 / 切换自启时保存，exe 同目录 |
 | `./glass-tuning.json` | 全部视觉与形变参数 | 首次运行自动生成，手工编辑热重载 |
 
@@ -114,22 +114,22 @@ Windows 桌面液态玻璃红绿灯挂件，实时显示 [Claude Code](https://c
 | `dragMin` | 拖动形变下限 | 0.5=最多缩到 50% | 0.5 | 0.3~1.0 |
 | `releaseImpulse` | 松手过冲倍率 | >1 强化回弹 | 1.5 | 1.0~3.0 |
 
-> ⚠️ **形变有硬上限，超了会被画布裁切**：画布 240×128、玻璃 230×96，所以任意时刻 **水平缩放 ≤ 240/230 ≈ 1.04、垂直缩放 ≤ 128/96 ≈ 1.33**。`steadyY` 叠加 `pressY` 与松手过冲的峰值一旦超过 1.33，胶囊顶/底会被切平。要更夸张的拉伸，得改 `ui/glass.hlsl` 的 `CANVAS`/`PILL`（涉及窗口重建，需重编译，非热重载）。
+> ⚠️ **形变有硬上限，超了会被画布裁切**：画布 240×144、玻璃 230×96，所以任意时刻 **水平缩放 ≤ 240/230 ≈ 1.04、垂直缩放 ≤ 144/96 = 1.50**。`steadyY` 叠加 `pressY` 与松手过冲的峰值一旦超过 1.50，胶囊顶/底会被切平。竖向拖动已内置 `maxDragScaleY=1.4` 钳制防止撞墙。要更夸张的拉伸，得改 `ui/glass.hlsl` 的 `CANVAS`/`PILL`（涉及窗口重建，需重编译，非热重载）。
 
 ## 架构
 
 ```
-main.go             入口：单实例互斥 → 加载配置 → 开机自启同步 → 安装 hook → 创建窗口 → 启动监测
+main.go             入口：单实例互斥（--restarted 轮询） → 加载配置 → 开机自启同步 → 安装 hook（幂等：exe真名） → 创建窗口 → 启动监测
 hookinstall.go      把状态 hook 幂等合并进 ~/.claude/settings.json
 config/             配置读写（config.json 位置/缩放/开机自启 + glass-tuning.json 视觉热重载）
   autostart.go      注册表 HKCU Run 读写删 + 路径自校正（开机自动启动）
 state/              四态枚举（灰/绿/黄/红）及优先级
-watcher/            每 100ms 读 hook 状态文件 + 每 3s 检测 claude.exe 进程
+watcher/            每 100ms 聚合每会话状态文件（任一会话忙=忙）+ 陈旧降级 + 每 3s 检测 claude.exe 进程
 ui/
   window.go           DComp 透明置顶窗、消息循环、自接管鼠标拖动、弹簧形变状态机、图标加载
   render.go           D3D11 渲染管线：device/swapchain/shader 编译 + 每帧绘制（动态 viewport）
   glass.hlsl          像素 shader：超椭圆 SDF 限定形状、shuding 折射核、三灯叠加
-  capture.go          Desktop Duplication 抓取桌面纹理（GPU 常驻，支持随缩放 Resize）
+  capture.go          Desktop Duplication 抓取桌面纹理（支持随缩放 Resize + 会话切换失效后限速重建）
   com.go              D3D11/DXGI/DComp COM 绑定（含 swapchain ResizeBuffers）
   win32.go            Win32 API 绑定与常量
   physics.go          二阶弹簧物理（每帧 Euler 积分，驱动形变）
@@ -147,9 +147,11 @@ PreToolUse       → 红（执行中）
 Stop             → 绿（空闲）
 ```
 
-Hook 以 exec form 安装（`command`=exe 路径 + `args`，直接 spawn 不经 shell），每个 hook 写状态文件 `~/.claude/agent-light-state`，watcher 每 100ms 读取。
+Hook 以 exec form 安装（`command`=exe 路径 + `args`，直接 spawn 不经 shell）。每个 hook 从 stdin JSON 读取 `session_id`，写 **每会话独立状态文件** `~/.claude/agent-light-state-<sid>`。watcher 每 100ms 聚合所有会话文件：**任一会话忙 → 全局忙**（防多 agent 并发时一个结束误拉绿）；全 idle → 绿；无文件 → 灰。
 
-自动灭灯：每 3s 用 `CreateToolhelp32Snapshot` 检测 `claude.exe` 进程，不在则切灰色。
+- **陈旧降级（120s）**：文件 mtime 超 120s 未刷新视为残留（崩溃/强杀未走 Stop），自动降为不忙——根治开机/空闲卡黄灯
+- **定时清理（10min）**：每 30s 清理超 10min 未更新的残留文件
+- **自动灭灯兜底**：每 3s 用 `CreateToolhelp32Snapshot` 检测 `claude.exe` 进程，不在则强制灰色
 
 ### 渲染管线
 

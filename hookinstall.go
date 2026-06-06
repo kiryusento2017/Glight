@@ -7,9 +7,6 @@ import (
 	"strings"
 )
 
-// 挂件自身 exe 名，用于在 settings.json 里识别「哪条 hook 是我加的」。
-const hookExeName = "claude-traffic-light.exe"
-
 // 4 个生命周期 hook → 状态。PreToolUse/PostToolUse 需要 matcher，其余不需要。
 var hookEvents = []struct {
 	event   string
@@ -102,7 +99,7 @@ func mergeHookEvent(hooks map[string]interface{}, event, state string, matcher b
 				continue
 			}
 			cmd, _ := hm["command"].(string)
-			if strings.EqualFold(filepath.Base(cmd), hookExeName) {
+			if strings.EqualFold(filepath.Base(cmd), filepath.Base(exe)) {
 				if cmd == exe {
 					return false // 已存在且路径未变，无需改动
 				}

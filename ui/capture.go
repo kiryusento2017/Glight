@@ -1,8 +1,10 @@
 package ui
 
 import (
+	"errors"
 	"fmt"
 	"image"
+	"time"
 	"unsafe"
 
 	"github.com/kirides/go-d3d/d3d11"
@@ -31,6 +33,8 @@ type Capture struct {
 	srv  uintptr // 供 shader 采样
 	buf  []byte  // w×h×4 裁剪缓冲（RGBA）
 	w, h int     // 当前桌面纹理尺寸（随窗口缩放变化）
+
+	lastRebuild time.Time // 上次 duplication 重建尝试时刻（限速用）
 }
 
 // newCapture 在渲染 device(rdev/rctx) 上建桌面 SRV 纹理，并启动 Desktop Duplication。
@@ -100,7 +104,12 @@ func (c *Capture) AcquireTexture(winRect RECT) (srv uintptr, ok bool) {
 	// 取新桌面帧；无新帧（桌面静止/拖动中）则沿用整屏缓存 c.full，
 	// 这样窗口移动时仍按当前位置裁剪、折射跟随，无需等新 duplication 帧，
 	// 拖动期间零整屏拷贝，顺滑。
-	_ = c.dup.GetImage(c.full, 10) // 10ms 超时：timeout 0 可能在桌面变化时恰好错过 DWM 帧
+	if err := c.dup.GetImage(c.full, 10); shouldRebuild(err) {
+		// duplication 失效（锁屏/解锁、分辨率切换、UAC 等会话切换）→ 限速重建，
+		// 否则会永久卡在失效前最后一帧（如锁屏壁纸）。
+		c.rebuild()
+	}
+	// 10ms 超时：timeout 0 可能在桌面变化时恰好错过 DWM 帧
 
 	ox := int(winRect.Left) - c.bounds.Min.X
 	oy := int(winRect.Top) - c.bounds.Min.Y
@@ -130,6 +139,48 @@ func (c *Capture) AcquireTexture(winRect RECT) (srv uintptr, ok bool) {
 	comCall(c.rctx, vtCtxUpdateSubresource, c.tex, 0, 0,
 		uintptr(unsafe.Pointer(&c.buf[0])), uintptr(dstRow), 0)
 	return c.srv, true
+}
+
+// rebuildThrottle 限制 duplication 重建频率：解锁/分辨率切换的过渡期内
+// 重建可能连续失败，不限速会每帧狂建狂败。
+const rebuildThrottle = 500 * time.Millisecond
+
+// shouldRebuild 判断 GetImage 的错误是否意味着 duplication 接口已失效、需重建。
+// ErrNoImageYet（超时/无新帧）是正常的"桌面静止"，不重建；其余错误
+// （DXGI_ERROR_ACCESS_LOST 等会话切换失效）才重建。
+func shouldRebuild(err error) bool {
+	return err != nil && !errors.Is(err, outputduplication.ErrNoImageYet)
+}
+
+// rebuild 限速重建 Desktop Duplication 接口（复用 gdev/gctx），并按当前桌面
+// 重读 bounds/重建整屏缓冲——一并修好分辨率切换后的折射错位。重建失败
+// （过渡期安全桌面仍在）不致命，下一帧再试。
+func (c *Capture) rebuild() {
+	if time.Since(c.lastRebuild) < rebuildThrottle {
+		return
+	}
+	c.lastRebuild = time.Now()
+
+	dup, err := outputduplication.NewIDXGIOutputDuplication(c.gdev, c.gctx, 0)
+	if err != nil {
+		return // 过渡期可能仍失败，下一帧再试
+	}
+	if c.dup != nil {
+		c.dup.Release()
+	}
+	c.dup = dup
+
+	// 分辨率/显示器可能已变，重读 bounds 并重建整屏缓冲
+	if b, err := c.dup.GetBounds(); err == nil && b != c.bounds {
+		c.bounds = b
+		c.full = image.NewRGBA(b)
+	}
+	// 预热抓一帧，避免重建后首帧全黑
+	for i := 0; i < 10; i++ {
+		if c.dup.GetImage(c.full, 100) == nil {
+			break
+		}
+	}
 }
 
 // Resize 把桌面纹理/SRV/裁剪缓冲重建到 w×h（窗口缩放时调用）。

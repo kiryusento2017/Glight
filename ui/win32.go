@@ -168,6 +168,7 @@ const (
 	menuReset    = 1004
 	menuResize   = 1005
 	menuExit     = 1003
+	menuRestart  = 1007
 )
 
 type POINT struct{ X, Y int32 }
