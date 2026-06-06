@@ -1,18 +1,18 @@
 <div align="center">
 
-# 🚦 Claude Code Light
+# 🚦 Glight
 
-**바탕화면에 떠 있는 리퀴드 글래스 신호등 —— vibe coding 중 곁눈질 한 번이면 AI가 지금 뭘 하는지 알 수 있습니다.**
+**Windows에서 항상 최상단에 떠 있는 리퀴드 글래스 신호등 —— 한눈에 Claude Code가 끝났는지 알 수 있는 vibe coding 동반자.**
 
 ![플랫폼](https://img.shields.io/badge/platform-Windows-0078D6?logo=windows&logoColor=white)
 ![언어](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)
 ![기술](https://img.shields.io/badge/D3D11_+_DirectComposition_+_HLSL-5C2D91)
 ![라이선스](https://img.shields.io/badge/license-MIT-green)
-[![다운로드](https://img.shields.io/badge/⬇_Download-Releases-success)](https://github.com/kiryusento2017/vibe-glass-light/releases)
+[![다운로드](https://img.shields.io/badge/⬇_Download-Releases-success)](https://github.com/kiryusento2017/Glight/releases)
 
 [简体中文](../../README.md) · [English](README.en.md) · [日本語](README.ja.md) · **한국어** · [繁體中文](README.zh-TW.md)
 
-<img src="../../assets/screenshot-wide.jpg" width="600" alt="Claude Code Light: VS Code 위에 떠 있는 리퀴드 글래스 신호등, 초록불 켜짐" />
+<img src="../../assets/screenshot-wide.jpg" width="600" alt="Glight(Claude Code Light): VS Code 위에 떠 있는 리퀴드 글래스 신호등, 초록불 켜짐" />
 
 <sub>바탕화면을 실제로 굴절시키는 리퀴드 글래스 캡슐. 가운데 세 개의 램프가 Claude Code 상태에 실시간으로 연동됩니다.</sub>
 
@@ -22,7 +22,7 @@
 
 ## 이게 뭔가요
 
-**Claude Code Light**는 Windows 바탕화면 위젯입니다. **항상 최상단에 떠 있는** 리퀴드 글래스 캡슐로, 그 너머로 실제 바탕화면이 실시간으로 굴절되어 일그러져 보입니다. 캡슐 가운데에는 세 개의 신호등이 박혀 있어 **[Claude Code](https://claude.ai/code)의 작업 상태를 실시간으로 보여줍니다**——
+**Glight**(별칭 Claude Code Light / Claude Code 신호등 상태 표시기)는 Windows 바탕화면 위젯입니다. **항상 최상단에 떠 있는** 리퀴드 글래스 캡슐로, 그 너머로 실제 바탕화면이 실시간으로 굴절되어 일그러져 보입니다. 캡슐 가운데에는 세 개의 신호등이 박혀 있어 **[Claude Code](https://claude.ai/code)의 작업 상태를 실시간으로 보여줍니다**——
 
 > 빨강 점멸 = 도구 실행 중; 노랑 점멸 = 생각 중; 초록 켜짐 = 대기(유휴); 모두 꺼짐 = 실행 중 아님.
 
@@ -60,7 +60,7 @@
 
 **1️⃣ 다운로드**
 
-[Releases](https://github.com/kiryusento2017/vibe-glass-light/releases)에서 `claude-traffic-light.exe`를 받아 아무 폴더에나 둡니다.
+[Releases](https://github.com/kiryusento2017/Glight/releases)에서 `claude-traffic-light.exe`를 받아 아무 폴더에나 둡니다.
 
 **2️⃣ 최초 실행은 관리자 권한으로**
 

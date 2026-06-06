@@ -1,8 +1,8 @@
 <div align="center">
 
-# 🚦 Claude Code Light
+# 🚦 Glight
 
-**悬浮在桌面的液态玻璃红绿灯 —— 上班 vibe coding 时，余光一扫就知道 AI 在干嘛。**
+**Windows 上永远置顶的液态玻璃红绿灯，一眼看出 Claude Code 跑完没 —— vibe coding 余光神器。**
 
 ![平台](https://img.shields.io/badge/平台-Windows-0078D6?logo=windows&logoColor=white)
 ![语言](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)
@@ -12,7 +12,7 @@
 
 **简体中文** · [English](docs/readme/README.en.md) · [日本語](docs/readme/README.ja.md) · [한국어](docs/readme/README.ko.md) · [繁體中文](docs/readme/README.zh-TW.md)
 
-<img src="assets/screenshot-wide.jpg" width="600" alt="Claude Code Light：浮在 VS Code 上的液态玻璃红绿灯，绿灯亮起" />
+<img src="assets/screenshot-wide.jpg" width="600" alt="Glight（Claude Code Light）：浮在 VS Code 上的液态玻璃红绿灯，绿灯亮起" />
 
 <sub>一块真实折射桌面的液态玻璃胶囊，中间三盏灯实时跟着 Claude Code 的状态走。</sub>
 
@@ -22,7 +22,7 @@
 
 ## 这是什么
 
-**Claude Code Light** 是一个 Windows 桌面挂件：一块**永远悬浮在最上层**的液态玻璃胶囊，透过它能看到真实桌面被实时折射扭曲。胶囊中间嵌着三盏红绿灯，**实时反映 [Claude Code](https://claude.ai/code) 的工作状态**——
+**Glight**（又名 Claude Code Light / Claude Code 红绿灯状态灯）是一个 Windows 桌面挂件：一块**永远悬浮在最上层**的液态玻璃胶囊，透过它能看到真实桌面被实时折射扭曲。胶囊中间嵌着三盏红绿灯，**实时反映 [Claude Code](https://claude.ai/code) 的工作状态**——
 
 > 红灯闪 = 正在执行工具；黄灯闪 = 正在思考；绿灯常亮 = 空闲等你；全灭 = 没在跑。
 

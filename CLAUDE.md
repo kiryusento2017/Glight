@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-**Claude Code Light** — Windows 桌面红绿灯挂件，实时显示 Claude Code 工作状态。单一 `.exe`，存于 U 盘即插即用。
+**Glight**（原名 Claude Code Light；产出的二进制仍叫 `claude-traffic-light.exe`）— Windows 桌面红绿灯挂件，实时显示 Claude Code 工作状态。单一 `.exe`，存于 U 盘即插即用。
 
 ## 构建命令
 
