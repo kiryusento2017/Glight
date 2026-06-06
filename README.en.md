@@ -78,6 +78,42 @@ If the widget lives on the **C: drive** (especially protected dirs like `C:\Prog
 
 Once set up, open Claude Code and start vibe coding — the lights will follow along.
 
+## 🔒 What files does it touch on your computer?
+
+Running an unfamiliar `.exe`, the thing you should care about most is "what exactly does it write to my computer?" So here's every file it touches and how it works, all laid bare — it **modifies no system files and makes no network connections whatsoever.**
+
+### How it works: Claude Code's "Hooks"
+
+Claude Code ships with a "hooks" mechanism: at key moments — when it **starts running a tool, is thinking, or stops** — it automatically runs commands you've registered in advance. This widget rides on that — on first launch it **adds 4 hooks** to Claude Code's own config file `~/.claude/settings.json`, so that whenever Claude Code's status changes it "pings" the widget, which switches the lights accordingly. The command those 4 hooks call **is the widget itself** (`claude-traffic-light.exe hook <state>`) — no third-party programs needed (unlike approaches that require Node).
+
+We're conservative when merging the hooks:
+
+- **Back up the entire `settings.json`** to `settings.json.bak` before touching it;
+- **Add only our own 4 entries — never delete or alter any of your existing config**;
+- Don't add them again if already present (idempotent);
+- **If you don't have Claude Code (the `~/.claude/` folder doesn't exist), it writes nothing — it won't even create the folder.**
+
+### Every file it creates / writes
+
+| File | Where | What for | When written |
+|---|---|---|---|
+| `config.json` | **next to the exe** | Remembers the widget's position / size / toggles | On drag, resize, menu actions |
+| `glass-tuning.json` | **next to the exe** | Glass appearance & deformation params for you to tweak | Generated once on first launch |
+| `settings.json` (**adds 4 hooks**) | `~/.claude/` | Lets Claude Code notify the widget on status change | First launch; backed up first |
+| `settings.json.bak` | `~/.claude/` | A **full backup** of the above, pre-change | Only when the hooks change |
+| `agent-light-state-<session-id>` | `~/.claude/agent-light/` | Each Claude session's current status (**just one word**: `running`/`thinking`/`idle`) | Overwritten on each status change |
+| Registry `Run` entry | `HKCU\...\Run` (user-level, **no UAC**) | Implements "Start on boot" | **Only if you enable** autostart; removed when unchecked |
+
+> The first two (`config.json` / `glass-tuning.json`) sit right next to the exe — plainly visible, deletable anytime. The rest live under your own `~/.claude/` user folder. It **never touches C: system directories or sensitive registry areas.**
+
+### Multiple Claudes at once won't confuse it
+
+Every Claude session gets its **own little state file** (one word inside). When several run at once, the widget aggregates these files every 0.1s: **as long as any session is busy, the light shows busy; only when all are idle does it turn green.** So when one agent finishes while another is still running, the light **won't be falsely flipped to green.** These small files are auto-cleaned if not updated for over 10 minutes, so they never pile up.
+
+### Want to wipe it completely?
+
+Delete the two `.json` files next to the exe + the `~/.claude/agent-light/` folder, then remove those 4 hooks from `~/.claude/settings.json` (or just restore from `.bak`); turning off "Start on boot" auto-removes the registry entry. **Clean uninstall, no leftovers.**
+
 ## 🎮 Usage
 
 - **Drag** — hold the visible capsule and drag to reposition (clicks on the transparent area outside the capsule do nothing, so no accidental drags).
@@ -213,23 +249,6 @@ Session C: thinking 🟡 ┘
 - **Process-check fallback**: every 3s, `CreateToolhelp32Snapshot` checks for `claude.exe`; if gone, force grey — crashes / force-kills / boot leftovers all fall back to grey via this.
 - **Periodic cleanup**: every 30s, leftover session files not updated in over 10 minutes are deleted (pure disk reclamation, decoupled from state logic).
 - **The hook handler is the widget itself** — zero external dependencies (unlike approaches needing node).
-
-</details>
-
-<details>
-<summary><b>📝 Files written</b> (click to expand)</summary>
-
-The widget **modifies no system files.** It reads/writes:
-
-| Path | Content | Notes |
-|---|---|---|
-| `~/.claude/settings.json` | 4 hook rules | Idempotent write on first launch (backup → merge → write back); if `~/.claude/` doesn't exist it **silently skips**, creating nothing |
-| `~/.claude/settings.json.bak` | Pre-edit original | Created when hook config changes |
-| `~/.claude/agent-light/agent-light-state-<sid>` | State word, one file per session | Overwritten on each hook trigger |
-| `./config.json` | Position/lock/visibility/scale/autostart | Saved on drag/menu/resize, next to the exe |
-| `./glass-tuning.json` | All visual & deformation params | Auto-generated on first run, hot-reloaded on manual edit |
-
-Enabling "Start on boot" writes one entry to `HKCU\...\Run` (user scope, no UAC); unchecking removes it.
 
 </details>
 
