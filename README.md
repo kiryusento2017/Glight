@@ -1,6 +1,6 @@
 # Claude Code Light 🚦
 
-> **English version**: [README.en.md](README.en.md)
+> **English version**: [英文](README.en.md)
 
 Windows 桌面液态玻璃红绿灯挂件，实时显示 [Claude Code](https://claude.ai/code) 工作状态。**上班 vibe coding 时余光一扫就知道 AI 在干嘛。**
 
