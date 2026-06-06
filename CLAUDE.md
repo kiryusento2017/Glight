@@ -12,16 +12,25 @@ Go 不在 PATH 中，需完整路径：
 
 ```powershell
 # 普通构建（带控制台，调试用）
-C:\Open Source Projects\go\bin\go.exe build -o claude-traffic-light.exe .
+C:\Open Source Projects\go\bin\go.exe build -trimpath -buildvcs=false -o claude-traffic-light.exe .
 
 # 发布构建（无控制台窗口）
-C:\Open Source Projects\go\bin\go.exe build -ldflags="-H windowsgui" -o claude-traffic-light.exe .
+C:\Open Source Projects\go\bin\go.exe build -trimpath -buildvcs=false -ldflags="-H windowsgui" -o claude-traffic-light.exe .
 
 # 运行测试
 C:\Open Source Projects\go\bin\go.exe test ./...
 ```
 
 工作目录：`D:\vs code projects\claude code light`
+
+### 构建规则（强制，所有构建一律遵守）
+
+**任何 `go build` 都必须带 `-trimpath -buildvcs=false`，调试构建也不例外。** 原因：Go 默认把编译机的绝对路径写进二进制行号表（pclntab），会泄露三类本机信息——GOROOT 路径（`C:\Open Source Projects\go`）、**Windows 用户名**（依赖 cache 路径 `C:\Users\<用户名>\go\pkg\mod\...`）、项目源码路径（`D:\vs code projects\...`）。
+
+- `-trimpath`：把所有嵌入路径换成模块相对路径（`claude-traffic-light/main.go`），盘符/用户名/目录结构全清。**不删符号**，不会加重杀软误报（区别于 `-s -w`，后者反而触发 Wacatac 误报，严禁加）。
+- `-buildvcs=false`：去掉嵌入的 git revision / 提交时间 / dirty 标记。
+- 代价：调试时 panic 堆栈路径变成模块相对路径，但文件名+行号仍在，定位无碍。
+- 验证清零：`grep -a -c "用户名" claude-traffic-light.exe` 应为 0；`go version -m exe` 不应出现绝对路径或 vcs 字段。
 
 ### exe 文件图标（踩坑警示）
 

@@ -179,14 +179,16 @@ WDA_EXCLUDEFROMCAPTURE 排除自身捕获，断开反馈循环
 
 ```powershell
 # 普通构建（带控制台，调试用）
-go build -o claude-traffic-light.exe .
+go build -trimpath -buildvcs=false -o claude-traffic-light.exe .
 
 # 发布构建（无控制台窗口）
-go build -ldflags="-H windowsgui" -o claude-traffic-light.exe .
+go build -trimpath -buildvcs=false -ldflags="-H windowsgui" -o claude-traffic-light.exe .
 
 # 测试
 go test ./...
 ```
+
+> ⚠️ **所有构建必须带 `-trimpath -buildvcs=false`**：Go 默认把编译机绝对路径（GOROOT、含 Windows 用户名的依赖 cache 路径、项目源码路径）写进二进制，会泄露作者本机信息。这两个标志清除路径与 git 元数据，且不删符号、不加重杀软误报。**严禁加 `-s -w`**（会触发 Wacatac 误报）。
 
 ### exe 文件图标（资源管理器里的图标）
 
