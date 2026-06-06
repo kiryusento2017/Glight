@@ -1,7 +1,7 @@
 {
   "FixedFileInfo": {
-    "FileVersion": { "Major": 1, "Minor": 5, "Patch": 0, "Build": 0 },
-    "ProductVersion": { "Major": 1, "Minor": 5, "Patch": 0, "Build": 0 },
+    "FileVersion": { "Major": 1, "Minor": 5, "Patch": 1, "Build": 0 },
+    "ProductVersion": { "Major": 1, "Minor": 5, "Patch": 1, "Build": 0 },
     "FileFlagsMask": "3f",
     "FileFlags": "00",
     "FileOS": "040004",
@@ -10,13 +10,13 @@
   },
   "StringFileInfo": {
     "CompanyName": "终末诗篇",
-    "FileDescription": "Claude Code Light - Windows desktop traffic-light widget showing Claude Code status",
-    "FileVersion": "1.5.0.0",
+    "FileDescription": "Glight - Windows desktop traffic-light widget showing Claude Code status",
+    "FileVersion": "1.5.1.0",
     "InternalName": "claude-traffic-light",
     "LegalCopyright": "Copyright (c) 2026 终末诗篇",
     "OriginalFilename": "claude-traffic-light.exe",
-    "ProductName": "Claude Code Light",
-    "ProductVersion": "1.5.0.0"
+    "ProductName": "Glight",
+    "ProductVersion": "1.5.1.0"
   },
   "VarFileInfo": {
     "Translation": { "LangID": "0409", "CharsetID": "04B0" }
