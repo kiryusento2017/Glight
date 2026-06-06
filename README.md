@@ -10,7 +10,7 @@
 ![许可](https://img.shields.io/badge/license-MIT-green)
 [![下载](https://img.shields.io/badge/⬇_下载-Releases-success)](../../releases)
 
-**简体中文** · [English](README.en.md)
+**简体中文** · [English](README.en.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [繁體中文](README.zh-TW.md)
 
 <img src="assets/screenshot-wide.jpg" width="600" alt="Claude Code Light：浮在 VS Code 上的液态玻璃红绿灯，绿灯亮起" />
 

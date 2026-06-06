@@ -10,7 +10,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![Download](https://img.shields.io/badge/⬇_Download-Releases-success)](../../releases)
 
-[简体中文](README.md) · **English**
+[简体中文](README.md) · **English** · [日本語](README.ja.md) · [한국어](README.ko.md) · [繁體中文](README.zh-TW.md)
 
 <img src="assets/screenshot-wide.jpg" width="600" alt="Claude Code Light: a liquid-glass traffic light floating over VS Code, green light lit" />
 
