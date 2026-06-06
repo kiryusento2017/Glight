@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"claude-traffic-light/state"
 )
@@ -47,36 +46,5 @@ func TestReadAggregates(t *testing.T) {
 				t.Errorf("got %v, want %v", got, c.want)
 			}
 		})
-	}
-}
-
-// TestReadStaleDemotes 验证陈旧 running/thinking 文件被降级为不忙：
-// 一个陈旧 running + 一个新鲜 thinking → 黄（陈旧的不计入，否则会是红）。
-func TestReadStaleDemotes(t *testing.T) {
-	dir := t.TempDir()
-	stale := writeState(t, dir, "old", "running")
-	old := time.Now().Add(-freshWindow - time.Minute)
-	if err := os.Chtimes(stale, old, old); err != nil {
-		t.Fatal(err)
-	}
-	writeState(t, dir, "new", "thinking")
-
-	w := &Watcher{stateDir: dir}
-	if got := w.read(); got != state.Yellow {
-		t.Errorf("got %v, want Yellow（陈旧 running 应降级）", got)
-	}
-}
-
-// TestReadStaleAloneIsGreen 单独一个陈旧忙态文件 → 绿，对应「开机/空闲残留不卡黄」。
-func TestReadStaleAloneIsGreen(t *testing.T) {
-	dir := t.TempDir()
-	stale := writeState(t, dir, "old", "thinking")
-	old := time.Now().Add(-freshWindow - time.Minute)
-	if err := os.Chtimes(stale, old, old); err != nil {
-		t.Fatal(err)
-	}
-	w := &Watcher{stateDir: dir}
-	if got := w.read(); got != state.Green {
-		t.Errorf("got %v, want Green（陈旧残留应降级，不卡黄）", got)
 	}
 }

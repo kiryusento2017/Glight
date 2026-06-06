@@ -73,7 +73,7 @@ Windows 桌面液态玻璃红绿灯挂件，实时显示 [Claude Code](https://c
 |---|---|---|
 | `~/.claude/settings.json` | 4 条 hook 规则 | 首次启动幂等写入（备份 → 合并 → 写回） |
 | `~/.claude/settings.json.bak` | 修改前的原文件 | 只在首次 hook 安装时创建一次 |
-| `~/.claude/agent-light-state-<session_id>` | 状态词（`idle`/`thinking`/`running`），每会话一个文件 | 每次 Claude Code hook 触发时覆盖写入 |
+| `~/.claude/agent-light/agent-light-state-<session_id>` | 状态词（`idle`/`thinking`/`running`），每会话一个文件 | 每次 Claude Code hook 触发时覆盖写入 |
 | `./config.json` | 位置 + 锁定/可见/缩放/开机自启 | 退出 / 调整大小 / 切换自启时保存，exe 同目录 |
 | `./glass-tuning.json` | 全部视觉与形变参数 | 首次运行自动生成，手工编辑热重载 |
 
@@ -124,7 +124,7 @@ hookinstall.go      把状态 hook 幂等合并进 ~/.claude/settings.json
 config/             配置读写（config.json 位置/缩放/开机自启 + glass-tuning.json 视觉热重载）
   autostart.go      注册表 HKCU Run 读写删 + 路径自校正（开机自动启动）
 state/              四态枚举（灰/绿/黄/红）及优先级
-watcher/            每 100ms 聚合每会话状态文件（任一会话忙=忙）+ 陈旧降级 + 每 3s 检测 claude.exe 进程
+watcher/            每 100ms 聚合每会话状态文件（任一会话忙=忙）+ 每 3s 检测 claude.exe 进程兜底灭灯
 ui/
   window.go           DComp 透明置顶窗、消息循环、自接管鼠标拖动、弹簧形变状态机、图标加载
   render.go           D3D11 渲染管线：device/swapchain/shader 编译 + 每帧绘制（动态 viewport）
@@ -147,11 +147,11 @@ PreToolUse       → 红（执行中）
 Stop             → 绿（空闲）
 ```
 
-Hook 以 exec form 安装（`command`=exe 路径 + `args`，直接 spawn 不经 shell）。每个 hook 从 stdin JSON 读取 `session_id`，写 **每会话独立状态文件** `~/.claude/agent-light-state-<sid>`。watcher 每 100ms 聚合所有会话文件：**任一会话忙 → 全局忙**（防多 agent 并发时一个结束误拉绿）；全 idle → 绿；无文件 → 灰。
+Hook 以 exec form 安装（`command`=exe 路径 + `args`，直接 spawn 不经 shell）。每个 hook 从 stdin JSON 读取 `session_id`，写 **每会话独立状态文件** `~/.claude/agent-light/agent-light-state-<sid>`。watcher 每 100ms 聚合所有会话文件：**任一会话忙 → 全局忙**（防多 agent 并发时一个结束误拉绿）；全 idle → 绿；无文件 → 灰。
 
-- **陈旧降级（120s）**：文件 mtime 超 120s 未刷新视为残留（崩溃/强杀未走 Stop），自动降为不忙——根治开机/空闲卡黄灯
-- **定时清理（10min）**：每 30s 清理超 10min 未更新的残留文件
-- **自动灭灯兜底**：每 3s 用 `CreateToolhelp32Snapshot` 检测 `claude.exe` 进程，不在则强制灰色
+- **忙态只信 hook 内容**：`running`→红、`thinking`→黄、`idle`→绿，不做时间窗口超时降级（长思考无工具调用→无 hook→若按超时会被误降绿）
+- **进程检测兜底灭灯**：每 3s 用 `CreateToolhelp32Snapshot` 检测 `claude.exe`，不在则强制灰——崩溃/强杀/开机残留统一靠这条回灰，根治开机卡黄灯
+- **定时清理（10min）**：每 30s 清理超 10min 未更新的残留文件（纯磁盘回收）
 
 ### 渲染管线
 

@@ -72,11 +72,12 @@ func main() {
 	win.Run()
 }
 
-// hookStateDir 返回状态文件所在目录（~/.claude）。每个会话写
+// hookStateDir 返回状态文件所在目录（~/.claude/agent-light/）。每个会话写
 // agent-light-state-<session_id>，挂件聚合该目录下所有此前缀文件。
+// 放在子目录避免在 ~/.claude/ 根目录摊一堆文件。
 func hookStateDir() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".claude")
+	return filepath.Join(home, ".claude", "agent-light")
 }
 
 // sessionFileName 把 session_id 规整为安全文件名；空则用 "default"。
@@ -127,6 +128,9 @@ func readSessionID() string {
 }
 
 // writeHookState 把状态词写入该会话的状态文件（hook 子命令用，极简快速、立即退出）。
+// 首次调用时自动创建 agent-light 子目录（如不存在）。
 func writeHookState(sid, s string) {
-	os.WriteFile(filepath.Join(hookStateDir(), sessionFileName(sid)), []byte(s), 0644)
+	dir := hookStateDir()
+	os.MkdirAll(dir, 0755)
+	os.WriteFile(filepath.Join(dir, sessionFileName(sid)), []byte(s), 0644)
 }

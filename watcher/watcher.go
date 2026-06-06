@@ -23,7 +23,7 @@ type Watcher struct {
 	claudeRunning bool // 上次进程检测结果，初始 true（启动时可能已在运行）
 }
 
-// New 创建状态监测器。stateDir 是 hook 写、挂件读的状态文件所在目录（~/.claude）。
+// New 创建状态监测器。stateDir 是 hook 写、挂件读的状态文件所在目录（~/.claude/agent-light/）。
 func New(stateDir string, onChange func(state.State)) *Watcher {
 	return &Watcher{
 		stateDir:      stateDir,
@@ -72,18 +72,15 @@ func (w *Watcher) poll() {
 // statePrefix 是每会话状态文件名前缀：agent-light-state-<session_id>。
 const statePrefix = "agent-light-state-"
 
-// freshWindow 是瞬时事件态（running/thinking）的新鲜度窗口。某会话文件超过此
-// 时长没被 hook 刷新，视为该会话已空闲/残留（崩溃没走 Stop、或长思考间隙），
-// 不计入忙。多 agent 各自静默不同步，总有新鲜忙文件，故误判罕见。
-const freshWindow = 120 * time.Second
-
-// cleanupWindow 是会话文件的物理清理阈值（远大于 freshWindow）：超此时长未更新
-// 就删除，回收崩溃/中断未走 Stop 的残留文件，防长期堆积。
+// cleanupWindow 是会话文件的物理清理阈值：超此时长未更新就删除，回收崩溃/中断
+// 未走 Stop 的残留文件，防长期堆积。纯磁盘清理，与状态判定解耦——状态忙/闲只看
+// 文件内容（running/thinking/idle），残留兜底交给 poll 的进程检测（claude.exe 没
+// 了→灰），不再用时间窗口猜「静默=空闲」（长思考也静默，固定阈值两全不了）。
 const cleanupWindow = 10 * time.Minute
 
 // read 聚合 stateDir 下所有会话状态文件为四态：任一会话 running→红、thinking→黄、
-// 全 idle→绿、无文件→灰。running/thinking 陈旧（超 freshWindow）降级为绿。
-// 灰还由 poll 的进程检测兜底（claude.exe 没了→灰）。
+// 全 idle→绿、无文件→灰。忙态只信 hook 写的内容，不做 mtime 超时降级；崩溃/强杀/
+// 开机残留靠 poll 的进程检测兜底（claude.exe 没了→灰）。
 func (w *Watcher) read() state.State {
 	files, _ := filepath.Glob(filepath.Join(w.stateDir, statePrefix+"*"))
 	if len(files) == 0 {
@@ -96,23 +93,17 @@ func (w *Watcher) read() state.State {
 	return state.Highest(states)
 }
 
-// readOne 把单个会话文件映射为四态。running/thinking 仅当文件在 freshWindow 内
-// 被刷新才算忙（红/黄）；陈旧或无法识别都当不忙（绿），由聚合层决定整体。
+// readOne 把单个会话文件映射为四态，只看 hook 写入的状态词：running→红、
+// thinking→黄、idle/读不到/无法识别→绿（不计入忙），由聚合层决定整体。
 func (w *Watcher) readOne(path string) state.State {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return state.Green // 读不到（刚被删等）→ 不计入忙
 	}
-	word := strings.TrimSpace(string(data))
-	switch word {
-	case "running", "thinking":
-		fi, err := os.Stat(path)
-		if err != nil || time.Since(fi.ModTime()) > freshWindow {
-			return state.Green // 陈旧 = 残留/长思考间隙 → 不计入忙
-		}
-		if word == "running" {
-			return state.Red
-		}
+	switch strings.TrimSpace(string(data)) {
+	case "running":
+		return state.Red
+	case "thinking":
 		return state.Yellow
 	case "idle":
 		return state.Green
