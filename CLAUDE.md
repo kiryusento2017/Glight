@@ -11,34 +11,48 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Go 不在 PATH 中，需完整路径：
 
 ```powershell
-# 普通构建（带控制台，调试用）
-C:\Open Source Projects\go\bin\go.exe build -trimpath -buildvcs=false -o claude-traffic-light.exe .
+# 调试（带控制台看输出，不产生 exe 文件）
+C:\Open Source Projects\go\bin\go.exe run .
 
-# 发布构建（无控制台窗口，输出到 dist/；dist 不存在先建）
+# 编译 exe（本地试装 / 发行，唯一一条；dist 不存在先建）
 C:\Open Source Projects\go\bin\go.exe build -trimpath -buildvcs=false -ldflags="-H windowsgui" -o dist\claude-traffic-light.exe .
 
 # 运行测试
 C:\Open Source Projects\go\bin\go.exe test ./...
 ```
 
-工作目录：`D:\vs code projects\claude code light`
+工作目录：`D:\vs code projects\claude code light`。完整流程见 [docs/编译构建发行.md](docs/编译构建发行.md)。
 
-### 构建规则（强制，所有构建一律遵守）
+### 构建规则（铁律，凡是编译成 exe 一律遵守）
 
-**任何 `go build` 都必须带 `-trimpath -buildvcs=false`，调试构建也不例外。** 原因：Go 默认把编译机的绝对路径写进二进制行号表（pclntab），会泄露三类本机信息——GOROOT 路径（`C:\Open Source Projects\go`）、**Windows 用户名**（依赖 cache 路径 `C:\Users\<用户名>\go\pkg\mod\...`）、项目源码路径（`D:\vs code projects\...`）。
+**核心原则：调试用 `go run .`（不产 exe、带控制台）；凡是产出 exe 文件，只有一条命令，所有防护一次带齐。**
 
-- `-trimpath`：把所有嵌入路径换成模块相对路径（`claude-traffic-light/main.go`），盘符/用户名/目录结构全清。**不删符号**，不会加重杀软误报（区别于 `-s -w`，后者反而触发 Wacatac 误报，严禁加）。
+```powershell
+go build -trimpath -buildvcs=false -ldflags="-H windowsgui" -o dist\claude-traffic-light.exe .
+```
+
+四件防护，缺一不可：
+- `-trimpath`：清掉二进制里的本机绝对路径——GOROOT（`C:\Open Source Projects\go`）、**Windows 用户名**（cache 路径 `C:\Users\<用户名>\...`）、项目路径（`D:\vs code projects\...`）。换成模块相对路径，盘符/用户名/目录全清。
 - `-buildvcs=false`：去掉嵌入的 git revision / 提交时间 / dirty 标记。
-- 代价：调试时 panic 堆栈路径变成模块相对路径，但文件名+行号仍在，定位无碍。
-- 验证清零：`grep -a -c "用户名" claude-traffic-light.exe` 应为 0；`go version -m exe` 不应出现绝对路径或 vcs 字段。
-- **铁律：发行版 exe 必须输出到 `dist/` 文件夹**（`-o dist\claude-traffic-light.exe`），与源码/调试产物隔离。`dist/` 已 gitignore。go build 不自动建目录，dist 不存在时先 `New-Item -ItemType Directory -Force dist`（或 `mkdir dist`）。调试构建不受此约束（仍可输出到根目录）。
+- `-ldflags="-H windowsgui"`：无控制台黑窗（GUI 程序）。
+- `-o dist\...`：统一输出 `dist/`（已 gitignore），与源码隔离。go build 不自动建目录，dist 不存在先 `mkdir dist`。
+- 自动链接 `rsrc_windows_amd64.syso`（图标 + 版本信息），让裸 exe 有正规身份、降启发式误报。
 
-### exe 文件图标（踩坑警示）
+**严禁**：① 加 `-s -w`（strip 符号反而触发 Wacatac 误报）；② 加壳（UPX 等）。
+**为什么不分调试/发行两套 exe 命令**：避免误发带本机特征或带黑窗的版本。要看崩溃输出就 `go run .`，不落 exe。
+验证清零：`grep -a -c "用户名" dist\claude-traffic-light.exe` 应为 0；`go version -m exe` 无绝对路径/vcs 字段。
 
-窗口/托盘图标走 `main.go` 的 `//go:embed claude-traffic-light.ico`（运行时）；**exe 文件图标**（资源管理器里）是另一套，靠 `rsrc_windows_amd64.syso` 链接时嵌入。
+### exe 图标 + 版本信息（syso，踩坑警示）
 
-- `.syso` 已 gitignore，缺失时重新生成：`go run github.com/akavel/rsrc@latest -ico claude-traffic-light.ico -o rsrc_windows_amd64.syso`
-- **文件名必须是 `rsrc_windows_amd64.syso`**（带平台后缀 go build 才自动挑）。**严禁**再多生成一个 `rsrc.syso`——两个 `.syso` 含资源段 → 链接报 `too many .rsrc sections`，构建必失败。
+窗口/托盘图标走 `main.go` 的 `//go:embed claude-traffic-light.ico`（运行时）；**exe 文件图标 + 资源管理器属性里的版本信息**（产品名/版本/署名/版权）是另一套，靠 `rsrc_windows_amd64.syso` 链接时嵌入。
+
+- 该 syso 由 **goversioninfo** 用 `versioninfo.json`（版本信息源，含署名「终末诗篇」）+ ico **合成一个**生成；`versioninfo.json` 与 `rsrc_windows_amd64.syso` 均已入库。
+- 平时构建不用碰；**只在改图标 / 版本号 / 署名时**重新生成：
+  ```powershell
+  goversioninfo -icon=claude-traffic-light.ico -o=rsrc_windows_amd64.syso
+  ```
+  （工具装一次：`go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest`，在 `~/go/bin/`）
+- **文件名必须是 `rsrc_windows_amd64.syso`**（带平台后缀 go build 才自动挑）。**严禁**再多生成一个含资源段的 `.syso`（如 `rsrc.syso`）——两个 → 链接报 `too many .rsrc sections`，构建必失败。`.gitignore` 仍忽略 `rsrc.syso` 防误生成。
 
 ## 架构
 

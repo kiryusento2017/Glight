@@ -181,27 +181,29 @@ WDA_EXCLUDEFROMCAPTURE 排除自身捕获，断开反馈循环
 需要 Go 工具链 + Windows：
 
 ```powershell
-# 普通构建（带控制台，调试用）
-go build -trimpath -buildvcs=false -o claude-traffic-light.exe .
+# 调试（带控制台看输出，不产生 exe）
+go run .
 
-# 发布构建（无控制台窗口，输出到 dist/）
+# 编译 exe（本地试装 / 发行，唯一一条；dist 不存在先建 mkdir dist）
 go build -trimpath -buildvcs=false -ldflags="-H windowsgui" -o dist/claude-traffic-light.exe .
 
 # 测试
 go test ./...
 ```
 
-> ⚠️ **所有构建必须带 `-trimpath -buildvcs=false`**：Go 默认把编译机绝对路径（GOROOT、含 Windows 用户名的依赖 cache 路径、项目源码路径）写进二进制，会泄露作者本机信息。这两个标志清除路径与 git 元数据，且不删符号、不加重杀软误报。**严禁加 `-s -w`**（会触发 Wacatac 误报）。
+> **编译铁律**：调试用 `go run .`（不产 exe）；凡是产出 exe 就用上面唯一那条命令，四件防护一次带齐——`-trimpath`（清本机路径/用户名）、`-buildvcs=false`（清 git 信息）、`-ldflags="-H windowsgui"`（无黑窗）、`-o dist/`（隔离），并自动嵌入图标+版本信息。**严禁 `-s -w`**（触发 Wacatac 误报）、严禁加壳。完整流程见 [docs/编译构建发行.md](docs/编译构建发行.md)。
 
-### exe 文件图标（资源管理器里的图标）
+### exe 图标 + 版本信息（资源管理器属性）
 
-窗口/托盘图标由 `main.go` 的 `//go:embed claude-traffic-light.ico` 在运行时加载；而 **exe 在资源管理器里显示的文件图标**是另一套机制——靠 `rsrc_windows_amd64.syso` 在**链接时**嵌入。
+窗口/托盘图标由 `main.go` 的 `//go:embed claude-traffic-light.ico` 在运行时加载；而 **exe 文件图标 + 资源管理器属性里的版本信息**（产品名/版本/署名）是另一套——靠 `rsrc_windows_amd64.syso` 在**链接时**嵌入。
 
-- 该 `.syso` 已 **gitignore**（不进库），克隆后若缺失，发行构建出的 exe 会显示成通用图标。重新生成：
+- 该 syso 由 **goversioninfo** 用 `versioninfo.json`（版本信息源）+ ico **合成一个**生成；`versioninfo.json` 与 syso **均已入库**，克隆后直接 `go build` 即带图标+版本信息。
+- **只在改图标/版本号/署名时**重新生成：
   ```powershell
-  go run github.com/akavel/rsrc@latest -ico claude-traffic-light.ico -o rsrc_windows_amd64.syso
+  goversioninfo -icon=claude-traffic-light.ico -o=rsrc_windows_amd64.syso
   ```
-- ⚠️ **文件名必须带 `_windows_amd64` 后缀**，go build 才会自动按平台挑它。**不要**再生成一个 `rsrc.syso`——两个 `.syso` 都含资源段会导致链接报错 `too many .rsrc sections`，构建直接失败。
+  （工具装一次：`go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest`）
+- ⚠️ **文件名必须带 `_windows_amd64` 后缀**，go build 才自动按平台挑它。**严禁**再生成第二个含资源段的 `.syso`（如 `rsrc.syso`）——两个都含资源段 → 链接报 `too many .rsrc sections` 构建失败。
 
 ## 技术栈
 
