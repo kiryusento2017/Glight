@@ -42,6 +42,16 @@ C:\Open Source Projects\go\bin\go.exe test ./...
 ```
 确认 ProductName / FileVersion / CompanyName 全部正确后，构建才算完成。
 
+**第五步：推 tag。** 构建验证通过、所有提交已推送后，打带注释 tag 并推到远端：
+```powershell
+git tag -a v1.x.x -m "Glight v1.x.x" <commit-hash>
+git push origin v1.x.x
+```
+
+**第六步：发 Release（用户操作）。** 这台机器没有 gh CLI，Release 页由用户在 GitHub 网页完成：
+进入 `https://github.com/kiryusento2017/Glight/releases/new?tag=v1.x.x`，选好 tag，填 Title、Release notes，上传 `dist\claude-traffic-light.exe`，点 Publish。
+Claude 负责准备好 Release notes 正文和 SHA256 供用户粘贴。
+
 ---
 
 **核心原则：调试用 `go run .`（不产 exe、带控制台）；凡是产出 exe 文件，只有一条命令，所有防护一次带齐。**
