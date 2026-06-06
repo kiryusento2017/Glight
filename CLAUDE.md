@@ -15,7 +15,8 @@ Go 不在 PATH 中，需完整路径：
 C:\Open Source Projects\go\bin\go.exe run .
 
 # 编译 exe（本地试装 / 发行，唯一一条；dist 不存在先建）
-C:\Open Source Projects\go\bin\go.exe build -trimpath -buildvcs=false -ldflags="-H windowsgui" -o dist\claude-traffic-light.exe .
+# 发行版文件名格式：Glight-v<版本号>-windows-amd64.exe
+C:\Open Source Projects\go\bin\go.exe build -trimpath -buildvcs=false -ldflags="-H windowsgui" -o dist\Glight-v1.5.1-windows-amd64.exe .
 
 # 运行测试
 C:\Open Source Projects\go\bin\go.exe test ./...
@@ -57,14 +58,14 @@ Claude 负责准备好 Release notes 正文和 SHA256 供用户粘贴。
 **核心原则：调试用 `go run .`（不产 exe、带控制台）；凡是产出 exe 文件，只有一条命令，所有防护一次带齐。**
 
 ```powershell
-go build -trimpath -buildvcs=false -ldflags="-H windowsgui" -o dist\claude-traffic-light.exe .
+go build -trimpath -buildvcs=false -ldflags="-H windowsgui" -o dist\Glight-v<版本号>-windows-amd64.exe .
 ```
 
 四件防护，缺一不可：
 - `-trimpath`：清掉二进制里的本机绝对路径——GOROOT（`C:\Open Source Projects\go`）、**Windows 用户名**（cache 路径 `C:\Users\<用户名>\...`）、项目路径（`D:\vs code projects\...`）。换成模块相对路径，盘符/用户名/目录全清。
 - `-buildvcs=false`：去掉嵌入的 git revision / 提交时间 / dirty 标记。
 - `-ldflags="-H windowsgui"`：无控制台黑窗（GUI 程序）。
-- `-o dist\...`：统一输出 `dist/`（已 gitignore），与源码隔离。go build 不自动建目录，dist 不存在先 `mkdir dist`。
+- `-o dist\...`：统一输出 `dist/`（已 gitignore），与源码隔离。go build 不自动建目录，dist 不存在先 `mkdir dist`。文件名格式 `Glight-v<版本号>-windows-amd64.exe`。
 - 自动链接 `rsrc_windows_amd64.syso`（图标 + 版本信息），让裸 exe 有正规身份、降启发式误报。
 
 **严禁**：① 加 `-s -w`（strip 符号反而触发 Wacatac 误报）；② 加壳（UPX 等）。
